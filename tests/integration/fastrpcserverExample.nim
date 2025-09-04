@@ -1,6 +1,8 @@
-import std/[monotimes, logging, times]
+import std/[monotimes, times]
 import fastrpc/server/fastrpcserver
 import fastrpc/server/rpcmethods
+
+import fastrpc/utils/logging
 
 from std/os import sleep
 
@@ -119,8 +121,8 @@ proc streamThread*(arg: ThreadArg[seq[MonoTime], TimerOptions]) {.thread, nimcal
 
 
 when isMainModule:
-  var logger = newConsoleLogger(fmtStr=verboseFmtStr, levelThreshold=lvlInfo)
-  addHandler(logger)
+  # var logger = newConsoleLogger(fmtStr=verboseFmtStr, levelThreshold=lvlInfo)
+  # addHandler(logger)
 
   let inetAddrs = [
     newInetAddr("0.0.0.0", 5656, Protocol.IPPROTO_UDP),
