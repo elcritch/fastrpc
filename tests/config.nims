@@ -1,4 +1,4 @@
-switch("path", "$projectDir/../src")
+switch("path", "../src")
 
 switch("gc", "arc")
 # switch("profiler", "on")

@@ -3,8 +3,7 @@ import sugar
 import mcu_utils/logging
 import mcu_utils/msgbuffer
 
-import ../inettypes
-import sockethelpers
+import mcu_utils/inettypes
 
 
 proc senderClosure*(sourceClient: Socket): SocketClientSender =

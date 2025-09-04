@@ -62,4 +62,4 @@ proc pack_type*[ByteStream](s: ByteStream, x: FastRpcParamsBuffer) =
 proc unpack_type*[ByteStream](s: ByteStream, x: var FastRpcParamsBuffer) =
   var params = s.readStrRemaining()
   x.buf = MsgBuffer.init()
-  shallowCopy(x.buf.data, params)
+  x.buf.data = params

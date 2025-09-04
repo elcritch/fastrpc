@@ -1,5 +1,5 @@
 import fastrpc/socketserver
-import fastrpc/socketserver/json_rpc_impl
+import fastrpc/socketservers/json_rpc_impl
 
 import std/monotimes
 

@@ -66,7 +66,7 @@ when defined(linux) or defined(macosx):
 
         when typeof(address) is string:
           address = getAddrString(cast[ptr SockAddr](addr(sockAddress)))
-          when domain == AF_INET6:
+          when domain == Domain.AF_INET6:
             port = ntohs(sockAddress.sin6_port).Port
           else:
             port = ntohs(sockAddress.sin_port).Port
