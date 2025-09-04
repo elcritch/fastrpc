@@ -1,7 +1,9 @@
+import std/times
+import std/monotimes
+import std/logging
+
 import ../utils/inettypes
 import ../utils/inetqueues
-# import mcu_utils/timeutils
-# include mcu_utils/threads
 
 import router
 import ../servertypes
@@ -15,8 +17,8 @@ import std/times
 type 
 
   UdpClientOpts = object
-    timeout: Millis
-    ts: Millis
+    timeout: Duration
+    ts: MonoTime
 
   FastRpcOpts* = ref object
     router*: FastRpcRouter
@@ -47,24 +49,24 @@ proc fastRpcInetReplies*(
         srv: ServerInfo[FastRpcOpts],
         queue: InetMsgQueue,
       ) =
-  logDebug("fastRpcEventHandler:eventHandler:")
+  debug("fastRpcEventHandler:eventHandler:")
   var item: InetMsgQueueItem
   while queue.tryRecv(item):
-    logDebug("fastRpcEventHandler:item: ", repr(item))
+    debug("fastRpcEventHandler:item: ", repr(item))
     case item.cid[].kind:
     of clSocket:
       withReceiverSocket(sock, item.cid[].fd, "fasteventhandler"):
         var msg: MsgBuffer = item.data[]
-        logDebug("fastRpcEventHandler:reply:tcp:", "sock:", repr(sock.getFd()))
+        debug("fastRpcEventHandler:reply:tcp:", "sock:", repr(sock.getFd()))
         var lenBuf = newString(2)
         lenBuf.toStrBe16(msg.data.len().int16)
         sock.sendSafe(lenBuf & msg.data)
     of clAddress:
-      logDebug("fastRpcEventHandler:reply:udp:", repr(item.cid))
+      debug("fastRpcEventHandler:reply:udp:", repr(item.cid))
       let cid = item.cid
       withReceiverSocket(sock, item.cid[].sfd, "fasteventhandler"):
         var msg: MsgBuffer = item.data[]
-        logDebug("fastRpcEventHandler:reply:udp:", "sock:", repr(sock.getFd()))
+        debug("fastRpcEventHandler:reply:udp:", "sock:", repr(sock.getFd()))
         sock.sendTo(cid[].host, cid[].port, msg.data)
     of clCanBus:
       raise newException(Exception, "TODO: canbus sender")
@@ -75,10 +77,10 @@ proc fastRpcEventHandler*(
         srv: ServerInfo[FastRpcOpts],
         evt: SelectEvent,
       ) =
-  logDebug("fastRpcEventHandler:eventHandler:")
+  debug("fastRpcEventHandler:eventHandler:")
   let router = srv.getOpts().router
 
-  logDebug("fastRpcEventHandler:loop")
+  debug("fastRpcEventHandler:loop")
 
   if evt == router.outQueue.evt:
     # process outgoing inet replies 
@@ -86,10 +88,10 @@ proc fastRpcEventHandler*(
   elif evt == router.registerQueue.evt:
     # process inputs on the "register queue"
     # and add them to the sub-events table
-    logDebug("fastRpcEventHandler:registerQueue: ", repr(evt))
+    debug("fastRpcEventHandler:registerQueue: ", repr(evt))
     var item: InetQueueItem[RpcSubOpts]
     while router.registerQueue.tryRecv(item):
-      logDebug("fastRpcEventHandler:regQueue:cid: ", repr item.cid)
+      debug("fastRpcEventHandler:regQueue:cid: ", repr item.cid)
       let opts = item.data
       let cidEvt = opts.evt
       var cid = item.cid
@@ -97,8 +99,8 @@ proc fastRpcEventHandler*(
       of InetClientType.clSocket:
         router.subEventProcs[cidEvt].subs[cid] = opts.subId
       of InetClientType.clAddress:
-        logDebug("fastRpcEventHandler:sub:registering")
-        let udpopts = UdpClientOpts(timeout: opts.timeout, ts: millis())
+        debug("fastRpcEventHandler:sub:registering")
+        let udpopts = UdpClientOpts(timeout: opts.timeout, ts: getMonoTime())
         srv.getOpts().udpRpcSubs[opts.subid] = udpopts
         var fds = newSeq[SocketHandle]()
         if cid[].sfd == SocketHandle -1:
@@ -107,12 +109,12 @@ proc fastRpcEventHandler*(
           fds.add cid[].sfd
         for fd in fds:
           let cidFd = newClientHandle(cid[].host, cid[].port, fd, cid[].protocol)
-          logDebug("fastRpcEventHandler:sub:registering:cid: ", repr cidFd)
+          debug("fastRpcEventHandler:sub:registering:cid: ", repr cidFd)
           router.subEventProcs[cidEvt].subs[cidFd] = opts.subId
       else:
         raise newException(ValueError, "unhandled cid subscription: " & repr(cid))
   elif evt in router.subEventProcs:
-    logDebug("fastRpcEventHandler:subEventProcs: ", repr(evt))
+    debug("fastRpcEventHandler:subEventProcs: ", repr(evt))
     # get event serializer and run it to get back the ParamsBuffer 
     let subClient = router.subEventProcs[evt]
     let msg: FastRpcParamsBuffer = subClient.eventProc()
@@ -135,7 +137,7 @@ proc fastRpcReadHandler*(
     host: IpAddress
     port: Port
 
-  logDebug("server:fastRpcReadHandler:")
+  debug("server:fastRpcReadHandler:")
   var clientId: InetClientHandle
 
   # Get network data
@@ -162,41 +164,41 @@ proc fastRpcReadHandler*(
   let router = srv.getOpts().router
   # var response = fastRpcExec(router, buffer, clientId)
 
-  # logDebug("msg: data: ", repr(response))
-  logDebug("readHandler:router: buffer: ", repr(buffer))
+  # debug("msg: data: ", repr(response))
+  debug("readHandler:router: buffer: ", repr(buffer))
 
   let res = router.inQueue.trySendMsg(clientId, buffer)
   if not res:
-    logInfo("readHandler:router:send: dropped ")
-  logDebug("readHandler:router:inQueue: ", repr(router.inQueue.chan.peek()))
+    info("readHandler:router:send: dropped ")
+  debug("readHandler:router:inQueue: ", repr(router.inQueue.chan.peek()))
 
 ## =================== Execute RPC Tasks =================== ##
 proc fastRpcExec*(router: FastRpcRouter, item: InetMsgQueueItem): bool =
-  logDebug("readHandler:router: inQueue: ", repr(router.inQueue.chan.peek()))
-  logDebug("fastrpcTask:item: ", repr(item))
+  debug("readHandler:router: inQueue: ", repr(router.inQueue.chan.peek()))
+  debug("fastrpcTask:item: ", repr(item))
 
   var response = router.callMethod(item.data[], item.cid)
-  logDebug("fastrpcTask:sent:response: ", repr(response))
+  debug("fastrpcTask:sent:response: ", repr(response))
   result = router.outQueue.trySendMsg(item.cid, response)
 
 
 proc fastRpcTask*(router: FastRpcRouter) {.thread.} =
   logInfo("Starting FastRpc Task")
-  logDebug("fastrpcTask:inQueue:chan: ", repr(router.inQueue.chan.addr().pointer))
+  debug("fastrpcTask:inQueue:chan: ", repr(router.inQueue.chan.addr().pointer))
 
   var status = true
   while status:
-    logDebug("fastrpcTask:loop: ")
+    debug("fastrpcTask:loop: ")
     let item: InetMsgQueueItem = router.inQueue.recv()
     let res = router.fastRpcExec(item)
-    logDebug("fastrpcTask:sent:res: ", repr(res))
+    debug("fastrpcTask:sent:res: ", repr(res))
 
 proc postServerProcessor(srv: ServerInfo[FastRpcOpts], results: seq[ReadyKey]) =
   var item: InetMsgQueueItem 
   let router = srv.getOpts().router
   while router.inQueue.tryRecv(item):
     let res = router.fastRpcExec(item)
-    logDebug("fastrpcProcessor:processed:sent:res: ", repr(res))
+    debug("fastrpcProcessor:processed:sent:res: ", repr(res))
   
   # Cleanup (garbage collect) the receivers and Client ID's 
   for evt, subcli in router.subEventProcs.pairs():
@@ -211,7 +213,7 @@ proc postServerProcessor(srv: ServerInfo[FastRpcOpts], results: seq[ReadyKey]) =
         of InetClientType.clAddress:
           let uopts = srv.getOpts().udpRpcSubs[subid]
           let curr = millis()
-          logDebug("fastrpcprocessor:cleanup:check:udp-subs:", repr uopts) 
+          debug("fastrpcprocessor:cleanup:check:udp-subs:", repr uopts) 
           if uopts.timeout == Millis(0): # unlimited udp subscription
             break cidCheck
           elif uopts.ts <= curr and (curr - uopts.ts) < uopts.timeout:
@@ -224,7 +226,7 @@ proc postServerProcessor(srv: ServerInfo[FastRpcOpts], results: seq[ReadyKey]) =
         removes.add cid
     for cid in removes:
       subcli.subs.del(cid)
-    logDebug("fastrpcprocessor:cleanup:subs:len:", subcli.subs.len())
+    debug("fastrpcprocessor:cleanup:subs:len:", subcli.subs.len())
 
 
 ## =================== Fast RPC Server Implementation =================== ##
@@ -251,10 +253,10 @@ proc newFastRpcServer*(router: FastRpcRouter,
   for evt, subcli in router.subEventProcs:
     result.events.add evt
 
-  logDebug("newFastRpcServer:registerQueue:evt: ", repr(router.registerQueue.evt))
-  logDebug("newFastRpcServer:outQueue:evt: ", repr(router.outQueue.evt))
-  logDebug("newFastRpcServer:inQueue:evt: ", repr(router.inQueue.evt))
-  logDebug("newFastRpcServer:inQueue:chan: ", repr(router.inQueue.chan.addr().pointer))
+  debug("newFastRpcServer:registerQueue:evt: ", repr(router.registerQueue.evt))
+  debug("newFastRpcServer:outQueue:evt: ", repr(router.outQueue.evt))
+  debug("newFastRpcServer:inQueue:evt: ", repr(router.inQueue.evt))
+  debug("newFastRpcServer:inQueue:chan: ", repr(router.inQueue.chan.addr().pointer))
   if threaded:
     # create n-threads
     createThread(result.opts.task, fastRpcTask, router)
