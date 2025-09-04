@@ -1,6 +1,6 @@
 import std/endians
 import std/sugar
-import std/os
+import std/oserrors
 import std/net
 import std/options
 import std/logging

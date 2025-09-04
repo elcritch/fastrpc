@@ -5,8 +5,6 @@ import std/tables
 import std/posix
 import std/logging
 
-# export net, selectors, tables, posix
-
 import ./utils/inettypes
 
 import servertypes
