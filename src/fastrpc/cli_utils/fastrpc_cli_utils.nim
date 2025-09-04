@@ -186,8 +186,9 @@ proc runRpc(opts: RpcOptions, req: FastRpcRequest) =
       # call[f] = v
     var call = req
 
-    let domain = if opts.ipAddr.ipaddr.family == IpAddressFamily.IPv6: Domain.AF_INET6 else: Domain.AF_INET6 
+    let domain = if opts.ipAddr.ipaddr.family == IpAddressFamily.IPv6: Domain.AF_INET6 else: Domain.AF_INET
     let protocol = if opts.udp: Protocol.IPPROTO_UDP else: Protocol.IPPROTO_TCP
+    print(colYellow, "[socket server: domain: ", $domain, " protocol: ", $protocol, "]")
     let client: Socket = newSocket(buffered=false, domain=domain, protocol=protocol)
 
     # var aiList = getAddrInfo(opts.ipAddr.ipstring, opts.port, domain)
@@ -196,7 +197,7 @@ proc runRpc(opts: RpcOptions, req: FastRpcRequest) =
     # print(colMagenta, "aiList: ", repr sa)
     # print(colMagenta, "sockaddr: ", aiList.ai_addr.getAddrString())
 
-    print(colYellow, "[connecting to server ip addr: ", $opts.ipAddr.ipstring, "]")
+    print(colYellow, "[connecting to server ip addr: ", $opts.ipAddr.ipstring, " port: ", $opts.port, " udp: ", $opts.udp, "]")
     if not opts.udp:
       client.connect(opts.ipAddr.ipstring, opts.port)
 
