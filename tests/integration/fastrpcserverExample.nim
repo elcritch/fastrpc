@@ -93,15 +93,15 @@ proc timeSampler*(queue: TimerDataQ, opts: TaskOption[TimerOptions]) {.rpcThread
   var data = opts.data
 
   while true:
-    logAllocStats(lvlInfo):
+    logAllocStats(lvlExtraDebug):
       var tvals = newSeqOfCap[int64](data.count)
       for i in 0..<data.count:
         var ts = int64(getMonoTime().ticks() div 1000)
         tvals.add ts
         #os.sleep(data.delay.int div (2*data.count))
 
-      logInfo "timePublisher:", "ts:", tvals[0], "len:", tvals.len.repr
-      logInfo "queue:len:", queue.chan.peek()
+      logDebug "timePublisher:", "ts:", tvals[0], "len:", tvals.len.repr
+      logDebug "queue:len:", queue.chan.peek()
 
       # let newOpts = opts.getUpdatedOption()
       # if newOpts.isSome:

@@ -6,4 +6,4 @@ switch("gc", "arc")
 switch("define", "debug")
 switch("threads", "on")
 
-switch("define", "McuUtilsLoggingLevel:lvlDebug")
+switch("define", "McuUtilsLoggingLevel:lvlInfo")
