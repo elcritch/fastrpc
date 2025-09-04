@@ -1,6 +1,8 @@
-import std/[monotimes, logging, times, os]
+import std/[monotimes, logging, times]
 import fastrpc/server/fastrpcserver
 import fastrpc/server/rpcmethods
+
+from std/os import sleep
 
 import json
 import random

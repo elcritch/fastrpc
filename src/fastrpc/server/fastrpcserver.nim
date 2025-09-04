@@ -10,7 +10,6 @@ import ../utils/inetqueues
 
 import router
 import ../servertypes
-import ../serverutils
 import ../socketserver
 
 export router, servertypes, socketserver

@@ -3,7 +3,6 @@ import sets
 import std/logging
 import ../utils/inettypes
 import ../servertypes
-import ../serverutils
 
 import hashes
 
