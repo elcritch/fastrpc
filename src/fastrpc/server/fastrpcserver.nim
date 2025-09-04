@@ -158,8 +158,11 @@ proc fastRpcReadHandler*(
 
   if stype == SockType.SOCK_STREAM:
     debug("server:fastRpcReadHandler:SOCK_STREAM")
-    discard sock.recv(buffer[].data, srv.getOpts().bufferSize)
-    if buffer[].data == "":
+    # Ensure the buffer has writable length, recv into it, then trim
+    buffer[].data.setLen(srv.getOpts().bufferSize)
+    let rcvLen = sock.recv(buffer[].data, srv.getOpts().bufferSize)
+    buffer[].data.setLen(rcvLen)
+    if rcvLen == 0 or buffer[].data == "":
       raise newException(InetClientDisconnected, "")
     let
       msglen = buffer[].unstore16().int
@@ -169,10 +172,13 @@ proc fastRpcReadHandler*(
     clientId = newClientHandle(sock.getFd())
   elif stype == SockType.SOCK_DGRAM:
     debug("server:fastRpcReadHandler:SOCK_DGRAM")
+    # Pre-size buffer for recvFrom; trim to actually received length
+    buffer[].data.setLen(srv.getOpts().bufferSize)
     let ret = sock.recvFrom(buffer[].data, buffer[].data.len(), host, port)
+    buffer[].data.setLen(ret)
     debug("server:fastRpcReadHandler:SOCK_DGRAM:ret: ", repr(ret))
     debug("server:fastRpcReadHandler:SOCK_DGRAM:", "host", repr(host), "port", repr(port))
-    if buffer[].data.len() == 0:
+    if ret == 0 or buffer[].data.len() == 0:
       raise newException(OSError, "invalid length: empty")
     clientId  = newClientHandle(host, port, sock.getFd())
   else:
