@@ -1,11 +1,11 @@
 import std/times
 import std/monotimes
-import std/logging
 import std/streams
 
 import msgpack4nim
 
 import ../utils/inettypes
+import ../utils/logging
 import ../utils/inetqueues
 
 import router

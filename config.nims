@@ -4,6 +4,7 @@ switch("gc", "arc")
 switch("define", "nimNetSocketExtras")
 switch("define", "debug")
 switch("threads", "on")
+switch("nimcache", "nimcache")
 
 switch("define", "McuUtilsLoggingLevel:lvlDebug")
 

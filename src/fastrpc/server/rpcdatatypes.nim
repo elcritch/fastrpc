@@ -6,16 +6,13 @@ export sugar
 
 import std/selectors
 import std/times
-import std/logging
 
 import threading/channels
 export sets, selectors, channels
 
-# include mcu_utils/threads
-# import mcu_utils/logging
 import ../utils/inettypes
 import ../utils/inetqueues
-# import ../utils/basictypes
+import ../utils/logging
 
 import msgpack4nim
 import msgpack4nim/msgpack2json

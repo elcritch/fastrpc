@@ -1,7 +1,7 @@
 import sets
 
-import std/logging
 import ../utils/inettypes
+import ../utils/logging
 import ../servertypes
 
 import hashes

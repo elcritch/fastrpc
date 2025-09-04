@@ -3,8 +3,8 @@ import std/sugar
 import std/oserrors
 import std/net
 import std/options
-import std/logging
 
+import ./utils/logging
 import ./utils/msgbuffer
 import ./utils/inettypes
 

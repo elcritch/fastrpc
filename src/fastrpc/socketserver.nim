@@ -3,9 +3,9 @@ import std/net
 import std/selectors
 import std/tables
 import std/posix
-import std/logging
 
 import ./utils/inettypes
+import ./utils/logging
 
 import servertypes
 

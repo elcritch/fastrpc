@@ -1,6 +1,6 @@
 
-import std/logging
 import ../utils/inettypes
+import ../utils/logging
 import ../servertypes
 
 type 

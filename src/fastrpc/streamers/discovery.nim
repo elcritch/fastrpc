@@ -1,9 +1,9 @@
 import std/monotimes, std/json, std/tables
 import std/random, std/json
 
-import std/logging
 import nephyr/[times, nets]
 
+import fastrpc/utils/logging
 import fastrpc/server/fastrpcserver
 import fastrpc/server/rpcmethods
 
