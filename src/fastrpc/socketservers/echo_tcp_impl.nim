@@ -1,6 +1,6 @@
 
-import mcu_utils/logging
-import mcu_utils/inettypes
+import std/logging
+import ../utils/inettypes
 import ../servertypes
 
 type 
@@ -17,7 +17,7 @@ proc echoTcpReadHandler*(srv: ServerInfo[EchoOpts],
   if message == "":
     raise newException(InetClientDisconnected, "")
   else:
-    logDebug("received from client: %s", message)
+    debug("received from client: %s", message)
 
     for cfd, client in srv.receivers:
       if srv.impl.opts.selfEchoDisable and cfd == sourceClient.getFd():

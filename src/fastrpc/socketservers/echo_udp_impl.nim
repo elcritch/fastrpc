@@ -1,7 +1,7 @@
 import sets
 
-import mcu_utils/logging
-import mcu_utils/inettypes
+import std/logging
+import ../utils/inettypes
 import ../servertypes
 import ../serverutils
 
@@ -25,7 +25,7 @@ proc echoUdpReadHandler*(srv: ServerInfo[EchoOpts],
     raise newException(InetClientDisconnected, "")
   else:
     srv.impl.opts.knownClients.incl(InetAddress(host: address, port: port))
-    logDebug("received from client:", message)
+    debug("received from client:", message)
 
     var msg = srv.impl.opts.prompt & message & "\r\n"
     for ia in srv.impl.opts.knownClients:

@@ -1,7 +1,7 @@
 import sets
 
-import mcu_utils/logging
-import mcu_utils/inettypes
+import std/logging
+import ../utils/inettypes
 import ../servertypes
 import ../serverutils
 
@@ -31,7 +31,7 @@ proc sendAllClients*(srv: ServerInfo[EchoOpts],
     if stype == SockType.SOCK_STREAM:
       client.send(msg)
 
-  logDebug("sendAllClients:", $srv.impl.opts.knownClients)
+  debug("sendAllClients:", $srv.impl.opts.knownClients)
   # udp clients
   for (ia, client) in srv.impl.opts.knownClients:
     client.sendTo(ia.host, ia.port, msg)
@@ -40,7 +40,7 @@ proc echoReadHandler*(srv: ServerInfo[EchoOpts],
                       sourceClient: Socket,
                       ) =
   let stype = srv.getSockType(sourceClient)
-  logDebug("echoReadHandler:", "sourceClient:", sourceClient.getFd().int, "socktype:", stype)
+  debug("echoReadHandler:", "sourceClient:", sourceClient.getFd().int, "socktype:", stype)
   var
     message = newString(EchoBufferSize)
 
@@ -62,7 +62,7 @@ proc echoReadHandler*(srv: ServerInfo[EchoOpts],
   if message == "":
     raise newException(InetClientDisconnected, "")
   else:
-    logDebug("received from client:", message)
+    debug("received from client:", message)
 
     srv.sendAllClients(sourceClient, message)
 
