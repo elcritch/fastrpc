@@ -116,8 +116,8 @@ proc startSocketServer*[T](ipaddrs: openArray[InetAddress],
   info "[SocketServer]::", "starting"
   for ia in ipaddrs:
     info "[SocketServer]::", "creating socket on: ",
-            "ip: ", $ia.host, "port: ", $ia.port, "domain: ", $ia.inetDomain(),
-            "sockType: ", $ia.socktype, "protocol: ", $ia.protocol
+            " ip: ", $ia.host, " port: ", $ia.port, " domain: ", $ia.inetDomain(),
+            " sockType: ", $ia.socktype, " protocol: ", $ia.protocol
 
     var socket = newSocket(
       domain=ia.inetDomain(),
