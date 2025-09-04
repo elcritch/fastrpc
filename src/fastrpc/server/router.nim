@@ -1,9 +1,7 @@
-import std/[tables, strutils, macros, logging]
+import std/[tables, strutils, macros]
 
-# import mcu_utils/basictypes
 import ../utils/msgbuffer
-# import mcu_utils/logging
-# include ../utils/threads
+import ../utils/logging
 
 import msgpack4nim
 export msgpack4nim
