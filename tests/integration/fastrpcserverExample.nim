@@ -53,7 +53,7 @@ DefineRpcs(name=exampleRpcs):
     result = "correct: " & msg
 
 type
-  TimerDataQ = InetEventQueue[seq[int64]]
+  TimerDataQ = InetEventQueue[seq[MonoTime]]
 
   TimerOptions {.rpcOption.} = object
     delay: Duration
@@ -70,14 +70,14 @@ DefineRpcTaskOptions[TimerOptions](name=timerOptionsRpcs):
     else:
       return false
   
-  proc getDelay(option: var TimerOptions): int {.rpcGetter.} =
+  proc getDelay(option: var TimerOptions): Duration {.rpcGetter.} =
     ## called by the socket server every time there's data
     ## on the queue argument given the `rpcEventSubscriber`.
     ## 
-    result = option.delay.inMilliseconds()
+    result = option.delay
   
 
-proc timeSerializer(queue: TimerDataQ): seq[int64] {.rpcSerializer.} =
+proc timeSerializer(queue: TimerDataQ): seq[MonoTime] {.rpcSerializer.} =
   ## called by the socket server every time there's data
   ## on the queue argument given the `rpcEventSubscriber`.
   ## 
@@ -112,7 +112,7 @@ proc timeSampler*(queue: TimerDataQ, opts: TaskOption[TimerOptions]) {.rpcThread
       var qvals = isolate tvals
       discard queue.trySend(qvals)
 
-proc streamThread*(arg: ThreadArg[seq[int64], TimerOptions]) {.thread, nimcall.} = 
+proc streamThread*(arg: ThreadArg[seq[MonoTime], TimerOptions]) {.thread, nimcall.} = 
   os.sleep(5_000)
   echo "streamThread: ", repr(arg.opt.data)
   timeSampler(arg.queue, arg.opt)
@@ -129,13 +129,13 @@ when isMainModule:
   echo "setup timer thread"
   var
     timer1q = TimerDataQ.init(10)
-    timerOpt = TimerOptions(delay: 1_000.Millis, count: 10)
+    timerOpt = TimerOptions(delay: initDuration(milliseconds=1_000), count: 10)
 
   var tchan: Chan[TimerOptions] = newChan[TimerOptions](1)
   var topt = TaskOption[TimerOptions](data: timerOpt, ch: tchan)
-  var arg = ThreadArg[seq[int64],TimerOptions](queue: timer1q, opt: topt)
-  var result: RpcStreamThread[seq[int64], TimerOptions]
-  createThread[ThreadArg[seq[int64], TimerOptions]](result, streamThread, move arg)
+  var arg = ThreadArg[seq[MonoTime],TimerOptions](queue: timer1q, opt: topt)
+  var result: RpcStreamThread[seq[MonoTime], TimerOptions]
+  createThread[ThreadArg[seq[MonoTime], TimerOptions]](result, streamThread, move arg)
 
   # os.sleep(5_000)
 

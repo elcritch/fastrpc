@@ -24,7 +24,7 @@ template withExecHandler(name, handlerProc, blk: untyped) =
       `blk`
   except Exception as err:
     info("[SocketServer]::", "unhandled error from server handler: ", repr `handlerProc`)
-    log(lvlInfo, err, "socketserver")
+    info("[SocketServer]::", err.msg, "socketserver")
     srv.errorCount.inc()
 
 template withReceiverSocket*(name: untyped, fd: SocketHandle, modname: string, blk: untyped) =
@@ -46,12 +46,12 @@ template withClientSocketErrorCleanups*(socktable: Table[SocketHandle, Socket],
     discard `socktable`.pop(key.fd.SocketHandle, client)
     srv.selector.unregister(key.fd)
     discard posix.close(key.fd.cint)
-    logError("receiver socket disconnected: fd: ", $key.fd)
+    error("receiver socket disconnected: fd: ", $key.fd)
   except InetClientError:
     `socktable`.del(key.fd.SocketHandle)
     srv.selector.unregister(key.fd)
     discard posix.close(key.fd.cint)
-    logError("receiver socket rx/tx error: ", $(key.fd))
+    error("receiver socket rx/tx error: ", $(key.fd))
 
 
 ## ============ Socket Server Core Functions ============ ##
