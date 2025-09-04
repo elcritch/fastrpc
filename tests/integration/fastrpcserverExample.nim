@@ -137,7 +137,8 @@ when isMainModule:
   var result: RpcStreamThread[seq[int64], TimerOptions]
   createThread[ThreadArg[seq[int64], TimerOptions]](result, streamThread, move arg)
 
-  os.sleep(5_000)
+  # os.sleep(5_000)
+
   echo "running fast rpc example"
   var router = newFastRpcRouter()
 

@@ -111,7 +111,7 @@ template readResponse(): untyped =
   response
 
 template prettyPrintResults(response: untyped): untyped = 
-  var resbuf = MsgStream.init(response.result.buf.data)
+  var resbuf = MsgBuffer.init(response.result.buf.data)
   mnode = resbuf.toJsonNode()
   if not opts.noprint and not opts.noresults:
     if opts.prettyPrint:
@@ -129,7 +129,7 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
     let mcall = ss.data
 
     template parseReultsJson(response: untyped): untyped = 
-      var resbuf = MsgStream.init(response.result.buf.data)
+      var resbuf = MsgBuffer.init(response.result.buf.data)
       resbuf.toJsonNode()
 
     timeBlock("call", opts):
@@ -139,7 +139,7 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
         print("[socket mcall bytes:lenprefix: " & repr msz & "]")
       # client.send( msz )
       if opts.udp:
-        client.sendTo(opts.ipAddr.ipstring, opts.port, msz & mcall)
+        client.sendTo(opts.ipAddr.ipstring, opts.port, mcall)
       else:
         client.send( msz & mcall )
 
@@ -148,7 +148,7 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
     var mnode: JsonNode
 
     if opts.subscribe:
-      var resbuf = MsgStream.init(response.result.buf.data)
+      var resbuf = MsgBuffer.init(response.result.buf.data)
       mnode = resbuf.toJsonNode()
       if not opts.quiet and not opts.noprint:
         print colAquamarine, "[response:kind: ", repr(response.kind), "]"
@@ -161,7 +161,7 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
       response = readResponse()
 
     if response.kind == Error:
-      var resbuf = MsgStream.init(response.result.buf.data)
+      var resbuf = MsgBuffer.init(response.result.buf.data)
       var err: FastRpcError
       resbuf.setPosition(0)
       resbuf.unpack(err)

@@ -12,9 +12,6 @@ import std/[os, strutils]
 task build_integration_tests, "build integration test tools":
   exec "nim c tests/integration/fastrpcserverExample.nim"
   exec "nim c tests/integration/fastrpccli.nim"
-  exec "nim c tests/integration/rpcmpackpubsubserver.nim"
-  # exec "nim c tests/integration/rpcmpackserver.nim"
-  # exec "nim c tests/integration/rpcmpackcli.nim"
   exec "nim c tests/integration/tcpechoserver.nim"
   exec "nim c tests/integration/udpechoserver.nim"
   exec "nim c tests/integration/combechoserver.nim"
