@@ -135,11 +135,12 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
     timeBlock("call", opts):
       let msz = mcall.len().int16.toStrBe16()
       if not opts.quiet and not opts.noprint:
-        print("[socket mcall bytes: " & repr(mcall.len()) & "]")
+        print("[socket mcall bytes:len: " & repr(mcall.len()) & "]")
         print("[socket mcall bytes:lenprefix: " & repr msz & "]")
+        print("[socket mcall bytes:data: " & repr(mcall[0..min(mcall.len(), 10)]) & "]")
       # client.send( msz )
       if opts.udp:
-        client.sendTo(opts.ipAddr.ipstring, opts.port, mcall)
+        client.sendTo($opts.ipAddr.ipaddr, opts.port, mcall)
       else:
         client.send( msz & mcall )
 

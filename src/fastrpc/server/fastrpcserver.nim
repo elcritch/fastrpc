@@ -170,7 +170,8 @@ proc fastRpcReadHandler*(
   elif stype == SockType.SOCK_DGRAM:
     debug("server:fastRpcReadHandler:SOCK_DGRAM")
     let ret = sock.recvFrom(buffer[].data, buffer[].data.len(), host, port)
-    debug("server:fastRpcReadHandler:SOCK_DGRAM:ret: ", repr(ret), "host: ", repr(host), "port: ", repr(port))
+    debug("server:fastRpcReadHandler:SOCK_DGRAM:ret: ", repr(ret))
+    debug("server:fastRpcReadHandler:SOCK_DGRAM:", "host", repr(host), "port", repr(port))
     clientId  = newClientHandle(host, port, sock.getFd())
   else:
     raise newException(ValueError, "unhandled socket type: " & $stype)
