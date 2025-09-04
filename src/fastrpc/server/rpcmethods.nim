@@ -1,12 +1,13 @@
-import tables, strutils, macros
-import options
+import std/[tables, strutils, macros] 
+import std/options
+import std/times
+import std/monotimes
+
 import threading/channels
 
-import mcu_utils/basictypes
-import mcu_utils/inettypes
-import mcu_utils/inetqueues
-import mcu_utils/msgbuffer
-include mcu_utils/threads
+import ../utils/inettypes
+import ../utils/inetqueues
+import ../utils/msgbuffer
 export inettypes, inetqueues
 
 export options
@@ -204,7 +205,7 @@ macro rpcGetter*(p: untyped): untyped =
 template rpc*(p: untyped): untyped =
   rpcImpl(p, nil, nil)
 
-template rpcPublisher*(args: static[Millis], p: untyped): untyped =
+template rpcPublisher*(args: static[Duration], p: untyped): untyped =
   rpcImpl(p, args, nil)
 
 template rpcThread*(p: untyped): untyped =
