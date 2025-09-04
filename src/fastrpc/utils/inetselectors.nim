@@ -1,5 +1,6 @@
 import std/selectors
-from os import OSErrorCode
+import std/oserrors
+import std/times
 
 import inetqueues
 import logging
@@ -73,11 +74,11 @@ template withEvent*(events: Table[InetEvent, ReadyKey], event: InetEvent, asKey:
     `code`
 
 
-template loop*(selector: EventSelector, timeout: Millis, events: Table[InetEvent, ReadyKey], code: untyped)  =
+template loop*(selector: EventSelector, timeout: Duration, events: Table[InetEvent, ReadyKey], code: untyped)  =
   while true:
     events.clear()
     let keys: seq[ReadyKey] = selector.raw.select(timeout.int)
-    # logDebug "[selector]::", "keys:", repr(keys)
+    # debug "[selector]::", "keys:", repr(keys)
     for key in keys:
       if Event.Error in key.events or key.errorCode.int != 0:
         let errItem = InetEvent(kind: Event.Error, errfd: key.fd, errorCode: key.errorCode)
@@ -89,17 +90,17 @@ template loop*(selector: EventSelector, timeout: Millis, events: Table[InetEvent
 
 template loopEvents*(
     selector: Selector[Event],
-    timeout: Millis,
+    timeout: Duration,
     userHandler: proc (selector: Selector[Event], key: ReadyKey) = nil,
     readHandler: proc (selector: Selector[Event], key: ReadyKey) = nil,
 ) =
   while true:
     var keys {.inject.}: seq[ReadyKey] = selector.select(timeout.int)
-    logDebug "[selector]::", "keys:", repr(keys)
+    debug "[selector]::", "keys:", repr(keys)
     `code`
   
     for key in keys:
-      logDebug "[selector]::", "key:", repr(key)
+      debug "[selector]::", "key:", repr(key)
       if Event.Read in key.events:
         if not readHandler.isNil: readHandler(selector, key)
       if Event.User in key.events:
