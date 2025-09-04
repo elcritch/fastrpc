@@ -1,13 +1,12 @@
-import endians
-import sugar
-import os
-import net
-import options
+import std/endians
+import std/sugar
+import std/os
+import std/net
+import std/options
+import std/logging
 
-import mcu_utils/logging
-import mcu_utils/msgbuffer
-import mcu_utils/inettypes
-include mcu_utils/threads
+import ./utils/msgbuffer
+import ./utils/inettypes
 
 import server/rpcdatatypes
 
@@ -126,7 +125,7 @@ proc sendSafe*(socket: Socket, data: string) =
 
 proc sendChunks*(sourceClient: Socket, rmsg: string, chunksize: int) =
   let rN = rmsg.len()
-  logDebug("rpc handler send client: bytes:", rN)
+  log(lvlDebug, "rpc handler send client: bytes:", rN)
   var i = 0
   while i < rN:
     var j = min(i + chunksize, rN) 
@@ -151,7 +150,7 @@ proc newSocketPair*(sockType: SockType = SockType.SOCK_STREAM,
                    ): (Socket, Socket) =
   ## create socket pairing 
 
-  dump([toInt(domain), toInt(sockType), toInt(protocol)])
+  log(lvlDebug, "newSocketPair: ", [toInt(domain), toInt(sockType), toInt(protocol)])
   var socketFds: array[2, cint]
   let status = posix.socketpair(
                              toInt(domain),

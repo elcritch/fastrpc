@@ -1,4 +1,4 @@
-import tables, strutils, macros
+import std/[tables, strutils, macros, logging]
 
 # import mcu_utils/basictypes
 import ../utils/msgbuffer
@@ -10,7 +10,6 @@ export msgpack4nim
 
 import rpcdatatypes
 export rpcdatatypes
-export Millis
 
 proc wrapResponse*(id: FastRpcId, resp: FastRpcParamsBuffer, kind = Response): FastRpcResponse = 
   result.kind = kind
@@ -144,7 +143,7 @@ proc callMethod*(router: FastRpcRouter,
                  buffer: MsgBuffer,
                  clientId: InetClientHandle,
                  ): QMsgBuffer =
-  logInfo("msgpack processing: ", repr(buffer))
+  log(lvlInfo, "msgpack processing: ", repr(buffer))
   var req: FastRpcRequest
   buffer.unpack(req)
   var res: FastRpcResponse = router.callMethod(req, clientId)

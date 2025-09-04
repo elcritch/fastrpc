@@ -6,6 +6,7 @@ export sugar
 
 import std/selectors
 import std/times
+import std/logging
 
 import threading/channels
 export sets, selectors, channels
@@ -129,7 +130,7 @@ proc subscribe*(
       if timeout != initDuration(milliseconds= -1): timeout
       else: router.subscriptionTimeout
   let subid: RpcSubId = randBinString()
-  logDebug "fastrouter:subscribing::", procName, "subid:", subid
+  log(lvlDebug, "fastrouter:subscribing::", procName, "subid:", subid)
   let val = RpcSubOpts(subid: subid,
                        evt: router.subNames[procName],
                        timeout: to,
