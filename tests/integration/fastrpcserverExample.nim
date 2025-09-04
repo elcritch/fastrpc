@@ -1,4 +1,4 @@
-import std/[monotimes, os, times]
+import std/[monotimes, os, logging, times]
 
 import fastrpc/server/fastrpcserver
 import fastrpc/server/rpcmethods
@@ -56,16 +56,16 @@ type
   TimerDataQ = InetEventQueue[seq[int64]]
 
   TimerOptions {.rpcOption.} = object
-    delay: Millis
+    delay: Duration
     count: int
 
 DefineRpcTaskOptions[TimerOptions](name=timerOptionsRpcs):
-  proc setDelay(opt: var TimerOptions, delayMs: int): bool {.rpcSetter.} =
+  proc setDelay(opt: var TimerOptions, delay: Duration): bool {.rpcSetter.} =
     ## called by the socket server every time there's data
     ## on the queue argument given the `rpcEventSubscriber`.
     ## 
-    if delayMs < 10_000:
-      opt.delay = Millis(delayMs)
+    if delay < initDuration(milliseconds=10_000):
+      opt.delay = delay
       return true
     else:
       return false
@@ -74,7 +74,7 @@ DefineRpcTaskOptions[TimerOptions](name=timerOptionsRpcs):
     ## called by the socket server every time there's data
     ## on the queue argument given the `rpcEventSubscriber`.
     ## 
-    result = option.delay.int
+    result = option.delay.inMilliseconds()
   
 
 proc timeSerializer(queue: TimerDataQ): seq[int64] {.rpcSerializer.} =
@@ -93,22 +93,22 @@ proc timeSampler*(queue: TimerDataQ, opts: TaskOption[TimerOptions]) {.rpcThread
   var data = opts.data
 
   while true:
-    logAllocStats(lvlExtraDebug):
-      var tvals = newSeqOfCap[int64](data.count)
+    block: # logAllocStats(lvlExtraDebug):
+      var tvals = newSeqOfCap[MonoTime](data.count)
       for i in 0..<data.count:
-        var ts = int64(getMonoTime().ticks() div 1000)
+        var ts = getMonoTime()
         tvals.add ts
         #os.sleep(data.delay.int div (2*data.count))
 
-      logDebug "timePublisher:", "ts:", tvals[0], "len:", tvals.len.repr
-      logDebug "queue:len:", queue.chan.peek()
+      debug "timePublisher:", "ts:", tvals[0], "len:", tvals.len.repr
+      debug "queue:len:", queue.chan.peek()
 
       # let newOpts = opts.getUpdatedOption()
       # if newOpts.isSome:
         # echo "setting new parameters: ", repr(newOpts)
         # data = newOpts.get()
 
-      os.sleep(data.delay.int)
+      os.sleep(data.delay.inMilliseconds())
       var qvals = isolate tvals
       discard queue.trySend(qvals)
 
