@@ -137,14 +137,6 @@ when isMainModule:
   var result: RpcStreamThread[seq[int64], TimerOptions]
   createThread[ThreadArg[seq[int64], TimerOptions]](result, streamThread, move arg)
 
-  # echo "start timer thread"
-  # var timerThr = startDataStream(
-  #   timeSampler,
-  #   streamThread,
-  #   timer1q,
-  #   timerOpt,
-  # )
-
   os.sleep(5_000)
   echo "running fast rpc example"
   var router = newFastRpcRouter()
@@ -152,16 +144,17 @@ when isMainModule:
   # register the `exampleRpcs` with our RPC router
   router.registerRpcs(exampleRpcs)
 
-  # register a `datastream` with our RPC router
-  echo "register datastream"
-  router.registerDataStream(
-    "microspub",
-    serializer=timeSerializer,
-    reducer=timeSampler, 
-    queue = timer1q,
-    option = timerOpt,
-    optionRpcs = timerOptionsRpcs,
-  )
+  when defined(testDatastream):
+    # register a `datastream` with our RPC router
+    echo "register datastream"
+    router.registerDataStream(
+      "microspub",
+      serializer=timeSerializer,
+      reducer=timeSampler, 
+      queue = timer1q,
+      option = timerOpt,
+      optionRpcs = timerOptionsRpcs,
+    )
 
   when defined(testMulticast):
     let maddr = newClientHandle("ff12::1", 2048, -1.SocketHandle, net.IPPROTO_UDP)
