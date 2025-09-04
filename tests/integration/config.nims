@@ -1,4 +1,4 @@
-switch("path", "$projectDir/../../src")
+switch("path", "../../src")
 
 switch("gc", "arc")
 # switch("profiler", "on")
@@ -6,4 +6,4 @@ switch("gc", "arc")
 switch("define", "debug")
 switch("threads", "on")
 
-switch("define", "McuUtilsLoggingLevel:lvlDebug")
+switch("define", "McuUtilsLoggingLevel:lvlInfo")

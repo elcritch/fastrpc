@@ -5,20 +5,22 @@ import std/sugar, std/options
 export sugar
 
 import std/selectors
+import std/times
+import std/logging
 
 import threading/channels
 export sets, selectors, channels
 
-include mcu_utils/threads
-import mcu_utils/logging
-import mcu_utils/inettypes
-import mcu_utils/inetqueues
-import mcu_utils/basictypes
+# include mcu_utils/threads
+# import mcu_utils/logging
+import ../utils/inettypes
+import ../utils/inetqueues
+# import ../utils/basictypes
 
 import msgpack4nim
 import msgpack4nim/msgpack2json
 
-export logging, msgpack4nim, msgpack2json
+export msgpack4nim, msgpack2json
 
 import protocol
 export protocol
@@ -48,7 +50,7 @@ type
   RpcSubOpts* = object
     subid*: RpcSubId
     evt*: SelectEvent
-    timeout*: Millis
+    timeout*: Duration
     source*: string
 
   RpcStreamSerializerClosure* = proc(): FastRpcParamsBuffer {.closure.}
@@ -63,7 +65,7 @@ type
     subEventProcs*: Table[SelectEvent, RpcSubClients]
     subNames*: Table[string, SelectEvent]
     stacktraces*: bool
-    subscriptionTimeout*: Millis
+    subscriptionTimeout*: Duration
     inQueue*: InetMsgQueue
     outQueue*: InetMsgQueue
     registerQueue*: InetEventQueue[InetQueueItem[RpcSubOpts]]
@@ -119,16 +121,16 @@ proc subscribe*(
     router: FastRpcRouter,
     procName: string,
     clientId: InetClientHandle,
-    timeout = -1.Millis,
+    timeout = initDuration(milliseconds= -1),
     source = "",
 ): Option[RpcSubId] =
   # send a request to fastrpcserver to subscribe a client to a subscription
   let 
     to =
-      if timeout != -1.Millis: timeout
+      if timeout != initDuration(milliseconds= -1): timeout
       else: router.subscriptionTimeout
   let subid: RpcSubId = randBinString()
-  logDebug "fastrouter:subscribing::", procName, "subid:", subid
+  log(lvlDebug, "fastrouter:subscribing::", procName, "subid:", subid)
   let val = RpcSubOpts(subid: subid,
                        evt: router.subNames[procName],
                        timeout: to,

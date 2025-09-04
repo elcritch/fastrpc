@@ -1,7 +1,7 @@
 import tables
-import mcu_utils/msgbuffer
-import mcu_utils/inettypes
-import mcu_utils/inetqueues
+import ../utils/msgbuffer
+import ../utils/inettypes
+import ../utils/inetqueues
 
 export tables, inettypes, inetqueues, msgbuffer
 
@@ -57,9 +57,9 @@ type
 ## MsgPack serde implementations ##
 
 proc pack_type*[ByteStream](s: ByteStream, x: FastRpcParamsBuffer) =
-  s.write(x.buf.data, x.buf.pos)
+  s.write(x.buf.data, x.buf.getPosition())
 
 proc unpack_type*[ByteStream](s: ByteStream, x: var FastRpcParamsBuffer) =
   var params = s.readStrRemaining()
   x.buf = MsgBuffer.init()
-  shallowCopy(x.buf.data, params)
+  x.buf.data = params

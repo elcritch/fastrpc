@@ -8,6 +8,7 @@ import locks
 import sugar
 import terminal 
 import colors
+import posix
 
 import cligen
 from cligen/argcvt import ArgcvtParams, argKeys         # Little helpers
@@ -47,6 +48,7 @@ type
     jsonArg: string
     ipAddr: RpcIpAddress
     port: Port
+    udp: bool
     noresults: bool
     prettyPrint: bool
     quiet: bool
@@ -70,47 +72,79 @@ template timeBlock(n: string, opts: RpcOptions, blk: untyped): untyped =
   allTimes.add(td.inMicroseconds())
   
 
+proc setReceiveTimeout(socket: Socket, timeoutMs: int) =
+  var timeout: Timeval
+  timeout.tv_sec = posix.Time(timeoutMs div 1000)
+  timeout.tv_usec = Suseconds(timeoutMs mod 1000 * 1000)
+  
+  if setsockopt(socket.getFd(), SOL_SOCKET, SO_RCVTIMEO, 
+                addr timeout, sizeof(timeout).Socklen) != 0:
+    raise newException(OSError, "Failed to set receive timeout")
+
 
 var
   id: int = 1
   allTimes = newSeq[int64]()
 
 template readResponse(): untyped = 
-  var msgLenBytes = client.recv(2, timeout = -1)
-  if msgLenBytes.len() == 0:
-    print(colGray, "[socket read: 0, return]")
-    return
-  var msgLen: int16 = msgLenBytes.fromStrBe16()
-  if not opts.quiet and not opts.noprint:
-    print(colGray, "[socket read:data:lenstr: " & repr(msgLenBytes) & "]")
-    print(colGray, "[socket read:data:len: " & repr(msgLen) & "]")
-
-  var msg = ""
-  while msg.len() < msgLen:
+  if opts.udp:
+    # UDP responses are a single datagram without a length prefix
+    var address: IpAddress
+    var port: Port
+    var msg = newString(65535)
+    let count = client.recvFrom(msg, msg.len(), address, port)
+    if count == 0:
+      print(colGray, "[udp socket read: 0, return]")
+      return
+    msg.setLen(count)
     if not opts.quiet and not opts.noprint:
-      print(colGray, "[reading msg]")
-    let mb = client.recv(msgLen, timeout = -1)
+      print(colGray, "[udp socket data: " & repr(msg) & "]")
+      print colGray, "[udp read bytes: ", $msg.len(), "]"
+
+    var rbuff = MsgBuffer.init(msg)
+    var response: FastRpcResponse
+    rbuff.unpack(response)
     if not opts.quiet and not opts.noprint:
-      print(colGray, "[read bytes: " & $mb.len() & "]")
-    msg.add mb
-  if not opts.quiet and not opts.noprint:
-    print(colGray, "[socket data: " & repr(msg) & "]")
+      print colAquamarine, "[response:kind: ", repr(response.kind), "]"
+      print colAquamarine, "[read response: ", repr response, "]"
+    response
+  else:
+    # TCP responses are length-prefixed (2 bytes, big-endian)
+    var msgLenBytes = client.recv(2, timeout = -1)
+    if msgLenBytes.len() == 0:
+      print(colGray, "[socket read: 0, return]")
+      return
+    var msgLen: int16 = msgLenBytes.fromStrBe16()
+    if not opts.quiet and not opts.noprint:
+      print(colGray, "[socket read:data:lenstr: " & repr(msgLenBytes) & "]")
+      print(colGray, "[socket read:data:len: " & repr(msgLen) & "]")
 
-  if not opts.quiet and not opts.noprint:
-    print colGray, "[read bytes: ", $msg.len(), "]"
-    print colGray, "[read: ", repr(msg), "]"
+    var msg = ""
+    while msg.len() < msgLen:
+      if not opts.quiet and not opts.noprint:
+        print(colGray, "[reading msg]")
+      let mb = client.recv(msgLen - msg.len(), timeout = -1)
+      if not opts.quiet and not opts.noprint:
+        print(colGray, "[read bytes: " & $mb.len() & "]")
+      msg.add mb
+    if not opts.quiet and not opts.noprint:
+      print(colGray, "[socket data: " & repr(msg) & "]")
 
-  var rbuff = MsgBuffer.init(msg)
-  var response: FastRpcResponse
-  rbuff.unpack(response)
+    if not opts.quiet and not opts.noprint:
+      print colGray, "[read bytes: ", $msg.len(), "]"
+      print colGray, "[read: ", repr(msg), "]"
 
-  if not opts.quiet and not opts.noprint:
-    print colAquamarine, "[response:kind: ", repr(response.kind), "]"
-    print colAquamarine, "[read response: ", repr response, "]"
-  response
+    var rbuff = MsgBuffer.init(msg)
+    var response: FastRpcResponse
+    rbuff.unpack(response)
+
+    if not opts.quiet and not opts.noprint:
+      print colAquamarine, "[response:kind: ", repr(response.kind), "]"
+      print colAquamarine, "[read response: ", repr response, "]"
+    response
 
 template prettyPrintResults(response: untyped): untyped = 
-  var resbuf = MsgStream.init(response.result.buf.data)
+  var resbuf = MsgBuffer.init(response.result.buf.data)
   mnode = resbuf.toJsonNode()
   if not opts.noprint and not opts.noresults:
     if opts.prettyPrint:
@@ -128,23 +162,27 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
     let mcall = ss.data
 
     template parseReultsJson(response: untyped): untyped = 
-      var resbuf = MsgStream.init(response.result.buf.data)
+      var resbuf = MsgBuffer.init(response.result.buf.data)
       resbuf.toJsonNode()
 
     timeBlock("call", opts):
       let msz = mcall.len().int16.toStrBe16()
       if not opts.quiet and not opts.noprint:
-        print("[socket mcall bytes: " & repr(mcall.len()) & "]")
+        print("[socket mcall ipaddr: " & repr(opts.ipAddr.ipaddr) & "]")
+        print("[socket mcall bytes:len: " & repr(mcall.len()) & "]")
         print("[socket mcall bytes:lenprefix: " & repr msz & "]")
-      # client.send( msz )
-      client.send( msz & mcall )
+        print("[socket mcall bytes:data: " & repr(mcall[0..min(mcall.len()-1, 20)]) & "]")
+      if opts.udp:
+        client.sendTo($opts.ipAddr.ipaddr, opts.port, mcall)
+      else:
+        client.send( msz & mcall )
 
       var response = readResponse()
 
     var mnode: JsonNode
 
     if opts.subscribe:
-      var resbuf = MsgStream.init(response.result.buf.data)
+      var resbuf = MsgBuffer.init(response.result.buf.data)
       mnode = resbuf.toJsonNode()
       if not opts.quiet and not opts.noprint:
         print colAquamarine, "[response:kind: ", repr(response.kind), "]"
@@ -157,7 +195,7 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
       response = readResponse()
 
     if response.kind == Error:
-      var resbuf = MsgStream.init(response.result.buf.data)
+      var resbuf = MsgBuffer.init(response.result.buf.data)
       var err: FastRpcError
       resbuf.setPosition(0)
       resbuf.unpack(err)
@@ -182,8 +220,11 @@ proc runRpc(opts: RpcOptions, req: FastRpcRequest) =
       # call[f] = v
     var call = req
 
-    let domain = if opts.ipAddr.ipaddr.family == IpAddressFamily.IPv6: Domain.AF_INET6 else: Domain.AF_INET6 
-    let client: Socket = newSocket(buffered=false, domain=domain)
+    let domain = if opts.ipAddr.ipaddr.family == IpAddressFamily.IPv6: Domain.AF_INET6 else: Domain.AF_INET
+    let protocol = if opts.udp: Protocol.IPPROTO_UDP else: Protocol.IPPROTO_TCP
+    let sockType = if opts.udp: SOCK_DGRAM else: SOCK_STREAM
+    print(colYellow, "[socket server: domain: ", $domain, " protocol: ", $protocol, "]")
+    let client: Socket = newSocket(buffered=false, domain=domain, sockType=sockType, protocol=protocol, )
 
     # var aiList = getAddrInfo(opts.ipAddr.ipstring, opts.port, domain)
     # print(colMagenta, "aiList: ", repr aiList)
@@ -191,8 +232,12 @@ proc runRpc(opts: RpcOptions, req: FastRpcRequest) =
     # print(colMagenta, "aiList: ", repr sa)
     # print(colMagenta, "sockaddr: ", aiList.ai_addr.getAddrString())
 
-    print(colYellow, "[connecting to server ip addr: ", $opts.ipAddr.ipstring, "]")
-    client.connect(opts.ipAddr.ipstring, opts.port)
+    print(colYellow, "[connecting to server ip addr: ", $opts.ipAddr.ipstring, " port: ", $opts.port, " udp: ", $opts.udp, "]")
+    if not opts.udp:
+      client.connect(opts.ipAddr.ipstring, opts.port)
+    else:
+      setReceiveTimeout(client, 1000)
+
     print(colYellow, "[connected to server ip addr: ", $opts.ipAddr.ipstring,"]")
     print(colBlue, "[call: ", repr call, "]")
 
@@ -202,8 +247,18 @@ proc runRpc(opts: RpcOptions, req: FastRpcRequest) =
       # except Exception:
         # print(colRed, "[exception: ", getCurrentExceptionMsg() ,"]")
 
+    var mb = newString(4096)
     while opts.keepalive:
-      let mb = client.recv(4096, timeout = -1)
+      var address: IpAddress
+      var port: Port
+      var count = 0
+      if opts.udp:
+        count = client.recvFrom(mb, mb.len(),address, port)
+      else:
+        count = client.recv(mb, mb.len(), timeout = -1)
+
+      mb.setLen(count)
+
       if mb != "":
         try:
           let res = mb.toJsonNode()
@@ -230,6 +285,7 @@ proc runRpc(opts: RpcOptions, req: FastRpcRequest) =
 proc call(ip: RpcIpAddress,
           cmdargs: seq[string],
           port=Port(5656),
+          udp=true,
           dry_run=false,
           quiet=false,
           silent=false,
@@ -255,6 +311,7 @@ proc call(ip: RpcIpAddress,
                         prettyPrint: pretty,
                         system: system,
                         subscribe: subscribe,
+                        udp: udp,
                         keepalive: keepalive)
 
   ## Some API call
@@ -268,7 +325,7 @@ proc call(ip: RpcIpAddress,
     jargs = if rawJsonArgs == "": %pargs else: rawJsonArgs.parseJson() 
   
   echo fmt("rpc call: name: '{name}' args: '{args}' ip:{repr ip} ")
-  echo fmt("rpc params:pargs: {repr pargs}")
+  # echo fmt("rpc params:pargs: {repr pargs}")
   echo fmt("rpc params:jargs: {repr jargs}")
   echo fmt("rpc params: {$jargs}")
 

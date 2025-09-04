@@ -1,3 +1,6 @@
+*
+!*/
+!*.*
 nimcache/
 nimblecache/
 htmldocs/
@@ -10,3 +13,7 @@ udpserver
 rpc_udp_cli
 tests/integration/fastrpccli
 tests/integration/fastrpcserver
+nimble.develop
+nimble.paths
+nim.cfg
+deps/

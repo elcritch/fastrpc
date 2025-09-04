@@ -1,12 +1,12 @@
-import std/monotimes, std/os
-
-import mcu_utils/allocstats
+import std/[monotimes, os, logging, times]
 
 import fastrpc/server/fastrpcserver
 import fastrpc/server/rpcmethods
 
 import json
 import random
+
+
 
 # Define RPC Server #
 DefineRpcs(name=exampleRpcs):
@@ -36,14 +36,14 @@ DefineRpcs(name=exampleRpcs):
       os.sleep(400)
     result = "k bye"
 
-  proc simulatelongcall(cntMillis: int): Millis {.rpc.} =
+  proc simulatelongcall(cntMillis: int): Duration {.rpc.} =
 
-    let t0 = getMonoTime().ticks div 1_000_000
+    let t0 = getMonoTime()
     echo("simulatelongcall: ", )
     os.sleep(cntMillis)
-    let t1 = getMonoTime().ticks div 1_000_000
+    let t1 = getMonoTime()
 
-    return Millis(t1-t0)
+    return t1-t0
 
 
   proc testerror(msg: string): string {.rpc.} =
@@ -53,31 +53,31 @@ DefineRpcs(name=exampleRpcs):
     result = "correct: " & msg
 
 type
-  TimerDataQ = InetEventQueue[seq[int64]]
+  TimerDataQ = InetEventQueue[seq[MonoTime]]
 
   TimerOptions {.rpcOption.} = object
-    delay: Millis
+    delay: Duration
     count: int
 
 DefineRpcTaskOptions[TimerOptions](name=timerOptionsRpcs):
-  proc setDelay(opt: var TimerOptions, delayMs: int): bool {.rpcSetter.} =
+  proc setDelay(opt: var TimerOptions, delay: Duration): bool {.rpcSetter.} =
     ## called by the socket server every time there's data
     ## on the queue argument given the `rpcEventSubscriber`.
     ## 
-    if delayMs < 10_000:
-      opt.delay = Millis(delayMs)
+    if delay < initDuration(milliseconds=10_000):
+      opt.delay = delay
       return true
     else:
       return false
   
-  proc getDelay(option: var TimerOptions): int {.rpcGetter.} =
+  proc getDelay(option: var TimerOptions): Duration {.rpcGetter.} =
     ## called by the socket server every time there's data
     ## on the queue argument given the `rpcEventSubscriber`.
     ## 
-    result = option.delay.int
+    result = option.delay
   
 
-proc timeSerializer(queue: TimerDataQ): seq[int64] {.rpcSerializer.} =
+proc timeSerializer(queue: TimerDataQ): seq[MonoTime] {.rpcSerializer.} =
   ## called by the socket server every time there's data
   ## on the queue argument given the `rpcEventSubscriber`.
   ## 
@@ -93,84 +93,82 @@ proc timeSampler*(queue: TimerDataQ, opts: TaskOption[TimerOptions]) {.rpcThread
   var data = opts.data
 
   while true:
-    logAllocStats(lvlInfo):
-      var tvals = newSeqOfCap[int64](data.count)
+    block: # logAllocStats(lvlExtraDebug):
+      var tvals = newSeqOfCap[MonoTime](data.count)
       for i in 0..<data.count:
-        var ts = int64(getMonoTime().ticks() div 1000)
+        var ts = getMonoTime()
         tvals.add ts
         #os.sleep(data.delay.int div (2*data.count))
 
-      logInfo "timePublisher:", "ts:", tvals[0], "len:", tvals.len.repr
-      logInfo "queue:len:", queue.chan.peek()
+      debug "timePublisher:", "ts:", tvals[0], "len:", tvals.len.repr
+      debug "queue:len:", queue.chan.peek()
 
       # let newOpts = opts.getUpdatedOption()
       # if newOpts.isSome:
         # echo "setting new parameters: ", repr(newOpts)
         # data = newOpts.get()
 
-      os.sleep(data.delay.int)
+      os.sleep(data.delay.inMilliseconds())
       var qvals = isolate tvals
       discard queue.trySend(qvals)
 
-proc streamThread*(arg: ThreadArg[seq[int64], TimerOptions]) {.thread, nimcall.} = 
+proc streamThread*(arg: ThreadArg[seq[MonoTime], TimerOptions]) {.thread, nimcall.} = 
   os.sleep(5_000)
   echo "streamThread: ", repr(arg.opt.data)
   timeSampler(arg.queue, arg.opt)
 
 
 when isMainModule:
+  var logger = newConsoleLogger(fmtStr=verboseFmtStr, levelThreshold=lvlDebug)
+  addHandler(logger)
+
   let inetAddrs = [
     newInetAddr("0.0.0.0", 5656, Protocol.IPPROTO_UDP),
-    newInetAddr("0.0.0.0", 5656, Protocol.IPPROTO_TCP),
-    newInetAddr("::", 5555, Protocol.IPPROTO_UDP),
-    newInetAddr("::", 5555, Protocol.IPPROTO_TCP),
+    # newInetAddr("0.0.0.0", 5656, Protocol.IPPROTO_TCP),
+    # newInetAddr("::", 5555, Protocol.IPPROTO_UDP),
+    # newInetAddr("::", 5555, Protocol.IPPROTO_TCP),
   ]
 
   echo "setup timer thread"
   var
     timer1q = TimerDataQ.init(10)
-    timerOpt = TimerOptions(delay: 1_000.Millis, count: 10)
+    timerOpt = TimerOptions(delay: initDuration(milliseconds=1_000), count: 10)
 
   var tchan: Chan[TimerOptions] = newChan[TimerOptions](1)
   var topt = TaskOption[TimerOptions](data: timerOpt, ch: tchan)
-  var arg = ThreadArg[seq[int64],TimerOptions](queue: timer1q, opt: topt)
-  var result: RpcStreamThread[seq[int64], TimerOptions]
-  createThread[ThreadArg[seq[int64], TimerOptions]](result, streamThread, move arg)
+  var arg = ThreadArg[seq[MonoTime],TimerOptions](queue: timer1q, opt: topt)
+  var result: RpcStreamThread[seq[MonoTime], TimerOptions]
+  createThread[ThreadArg[seq[MonoTime], TimerOptions]](result, streamThread, move arg)
 
-  # echo "start timer thread"
-  # var timerThr = startDataStream(
-  #   timeSampler,
-  #   streamThread,
-  #   timer1q,
-  #   timerOpt,
-  # )
+  # os.sleep(5_000)
 
-  os.sleep(5_000)
   echo "running fast rpc example"
   var router = newFastRpcRouter()
 
   # register the `exampleRpcs` with our RPC router
   router.registerRpcs(exampleRpcs)
 
-  # register a `datastream` with our RPC router
-  echo "register datastream"
-  router.registerDataStream(
-    "microspub",
-    serializer=timeSerializer,
-    reducer=timeSampler, 
-    queue = timer1q,
-    option = timerOpt,
-    optionRpcs = timerOptionsRpcs,
-  )
+  when defined(testDatastream):
+    # register a `datastream` with our RPC router
+    echo "register datastream"
+    router.registerDataStream(
+      "microspub",
+      serializer=timeSerializer,
+      reducer=timeSampler, 
+      queue = timer1q,
+      option = timerOpt,
+      optionRpcs = timerOptionsRpcs,
+    )
 
-  let maddr = newClientHandle("ff12::1", 2048, -1.SocketHandle, net.IPPROTO_UDP)
-  logInfo "app_net_rpc:", "multicast-addr:", repr maddr
-  let mpub = router.subscribe("microspub", maddr, timeout = 0.Millis, source = "")
-  logInfo "app_net_rpc:", "multicast-publish:", repr mpub
+  when defined(testMulticast):
+    let maddr = newClientHandle("ff12::1", 2048, -1.SocketHandle, net.IPPROTO_UDP)
+    logInfo "app_net_rpc:", "multicast-addr:", repr maddr
+    let mpub = router.subscribe("microspub", maddr, timeout = 0.Millis, source = "")
+    logInfo "app_net_rpc:", "multicast-publish:", repr mpub
 
-  # print out all our new rpc's!
-  for rpc in router.procs.keys():
-    echo "  rpc: ", rpc
+    # print out all our new rpc's!
+    for rpc in router.procs.keys():
+      echo "  rpc: ", rpc
 
   var frpcServer = newFastRpcServer(router, prefixMsgSize=true, threaded=false)
   startSocketServer(inetAddrs, frpcServer)
