@@ -87,38 +87,61 @@ var
   allTimes = newSeq[int64]()
 
 template readResponse(): untyped = 
-  var msgLenBytes = client.recv(2, timeout = -1)
-  if msgLenBytes.len() == 0:
-    print(colGray, "[socket read: 0, return]")
-    return
-  var msgLen: int16 = msgLenBytes.fromStrBe16()
-  if not opts.quiet and not opts.noprint:
-    print(colGray, "[socket read:data:lenstr: " & repr(msgLenBytes) & "]")
-    print(colGray, "[socket read:data:len: " & repr(msgLen) & "]")
-
-  var msg = ""
-  while msg.len() < msgLen:
+  if opts.udp:
+    # UDP responses are a single datagram without a length prefix
+    var address: IpAddress
+    var port: Port
+    var msg = newString(65535)
+    let count = client.recvFrom(msg, msg.len(), address, port)
+    if count == 0:
+      print(colGray, "[udp socket read: 0, return]")
+      return
+    msg.setLen(count)
     if not opts.quiet and not opts.noprint:
-      print(colGray, "[reading msg]")
-    let mb = client.recv(msgLen, timeout = -1)
+      print(colGray, "[udp socket data: " & repr(msg) & "]")
+      print colGray, "[udp read bytes: ", $msg.len(), "]"
+
+    var rbuff = MsgBuffer.init(msg)
+    var response: FastRpcResponse
+    rbuff.unpack(response)
     if not opts.quiet and not opts.noprint:
-      print(colGray, "[read bytes: " & $mb.len() & "]")
-    msg.add mb
-  if not opts.quiet and not opts.noprint:
-    print(colGray, "[socket data: " & repr(msg) & "]")
+      print colAquamarine, "[response:kind: ", repr(response.kind), "]"
+      print colAquamarine, "[read response: ", repr response, "]"
+    response
+  else:
+    # TCP responses are length-prefixed (2 bytes, big-endian)
+    var msgLenBytes = client.recv(2, timeout = -1)
+    if msgLenBytes.len() == 0:
+      print(colGray, "[socket read: 0, return]")
+      return
+    var msgLen: int16 = msgLenBytes.fromStrBe16()
+    if not opts.quiet and not opts.noprint:
+      print(colGray, "[socket read:data:lenstr: " & repr(msgLenBytes) & "]")
+      print(colGray, "[socket read:data:len: " & repr(msgLen) & "]")
 
-  if not opts.quiet and not opts.noprint:
-    print colGray, "[read bytes: ", $msg.len(), "]"
-    print colGray, "[read: ", repr(msg), "]"
+    var msg = ""
+    while msg.len() < msgLen:
+      if not opts.quiet and not opts.noprint:
+        print(colGray, "[reading msg]")
+      let mb = client.recv(msgLen - msg.len(), timeout = -1)
+      if not opts.quiet and not opts.noprint:
+        print(colGray, "[read bytes: " & $mb.len() & "]")
+      msg.add mb
+    if not opts.quiet and not opts.noprint:
+      print(colGray, "[socket data: " & repr(msg) & "]")
 
-  var rbuff = MsgBuffer.init(msg)
-  var response: FastRpcResponse
-  rbuff.unpack(response)
+    if not opts.quiet and not opts.noprint:
+      print colGray, "[read bytes: ", $msg.len(), "]"
+      print colGray, "[read: ", repr(msg), "]"
 
-  if not opts.quiet and not opts.noprint:
-    print colAquamarine, "[response:kind: ", repr(response.kind), "]"
-    print colAquamarine, "[read response: ", repr response, "]"
-  response
+    var rbuff = MsgBuffer.init(msg)
+    var response: FastRpcResponse
+    rbuff.unpack(response)
+
+    if not opts.quiet and not opts.noprint:
+      print colAquamarine, "[response:kind: ", repr(response.kind), "]"
+      print colAquamarine, "[read response: ", repr response, "]"
+    response
 
 template prettyPrintResults(response: untyped): untyped = 
   var resbuf = MsgBuffer.init(response.result.buf.data)
