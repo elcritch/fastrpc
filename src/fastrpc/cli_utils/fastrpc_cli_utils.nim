@@ -47,6 +47,7 @@ type
     jsonArg: string
     ipAddr: RpcIpAddress
     port: Port
+    udp: bool
     noresults: bool
     prettyPrint: bool
     quiet: bool
@@ -137,7 +138,10 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
         print("[socket mcall bytes: " & repr(mcall.len()) & "]")
         print("[socket mcall bytes:lenprefix: " & repr msz & "]")
       # client.send( msz )
-      client.send( msz & mcall )
+      if opts.udp:
+        client.sendTo(opts.ipAddr.ipstring, opts.port, msz & mcall)
+      else:
+        client.send( msz & mcall )
 
       var response = readResponse()
 
@@ -183,7 +187,8 @@ proc runRpc(opts: RpcOptions, req: FastRpcRequest) =
     var call = req
 
     let domain = if opts.ipAddr.ipaddr.family == IpAddressFamily.IPv6: Domain.AF_INET6 else: Domain.AF_INET6 
-    let client: Socket = newSocket(buffered=false, domain=domain)
+    let protocol = if opts.udp: Protocol.IPPROTO_UDP else: Protocol.IPPROTO_TCP
+    let client: Socket = newSocket(buffered=false, domain=domain, protocol=protocol)
 
     # var aiList = getAddrInfo(opts.ipAddr.ipstring, opts.port, domain)
     # print(colMagenta, "aiList: ", repr aiList)
@@ -192,7 +197,9 @@ proc runRpc(opts: RpcOptions, req: FastRpcRequest) =
     # print(colMagenta, "sockaddr: ", aiList.ai_addr.getAddrString())
 
     print(colYellow, "[connecting to server ip addr: ", $opts.ipAddr.ipstring, "]")
-    client.connect(opts.ipAddr.ipstring, opts.port)
+    if not opts.udp:
+      client.connect(opts.ipAddr.ipstring, opts.port)
+
     print(colYellow, "[connected to server ip addr: ", $opts.ipAddr.ipstring,"]")
     print(colBlue, "[call: ", repr call, "]")
 
@@ -202,8 +209,18 @@ proc runRpc(opts: RpcOptions, req: FastRpcRequest) =
       # except Exception:
         # print(colRed, "[exception: ", getCurrentExceptionMsg() ,"]")
 
+    var mb = newString(4096)
     while opts.keepalive:
-      let mb = client.recv(4096, timeout = -1)
+      var address: IpAddress
+      var port: Port
+      var count = 0
+      if opts.udp:
+        count = client.recvFrom(mb, mb.len(),address, port)
+      else:
+        count = client.recv(mb, mb.len(), timeout = -1)
+
+      mb.setLen(count)
+
       if mb != "":
         try:
           let res = mb.toJsonNode()
@@ -230,6 +247,7 @@ proc runRpc(opts: RpcOptions, req: FastRpcRequest) =
 proc call(ip: RpcIpAddress,
           cmdargs: seq[string],
           port=Port(5656),
+          udp=true,
           dry_run=false,
           quiet=false,
           silent=false,
@@ -255,6 +273,7 @@ proc call(ip: RpcIpAddress,
                         prettyPrint: pretty,
                         system: system,
                         subscribe: subscribe,
+                        udp: udp,
                         keepalive: keepalive)
 
   ## Some API call
