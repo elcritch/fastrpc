@@ -49,15 +49,15 @@ proc register*(router: var FastRpcRouter;
   router.subNames[path] = evt
   let subs = newTable[InetClientHandle, RpcSubId]()
   router.subEventProcs[evt] = RpcSubClients(eventProc: serializer, subs: subs)
-  echo "registering:sub: ", path
+  debug "registering:sub: ", path
 
 proc register*(router: var FastRpcRouter, path: string, call: FastRpcProc) =
   router.procs[path] = call
-  echo "registering: ", path
+  debug "registering: ", path
 
 proc sysRegister*(router: var FastRpcRouter, path: string, call: FastRpcProc) =
   router.sysprocs[path] = call
-  echo "registering: sys: ", path
+  debug "registering: sys: ", path
 
 proc clear*(router: var FastRpcRouter) =
   router.procs.clear
@@ -80,7 +80,7 @@ proc callMethod*(
       rpcProc = router.sysprocs.getOrDefault(req.procName)
     of Subscribe:
       # rpcProc = router.procs.getOrDefault(req.procName)
-      echo "CALL:METHOD: SUBSCRIBE"
+      debug "CALL:METHOD: SUBSCRIBE"
       let hasSubProc = req.procname in router.subNames
       if not hasSubProc:
         let methodNotFound = req.procName & " is not a registered RPC method."
@@ -143,7 +143,7 @@ proc callMethod*(router: FastRpcRouter,
                  buffer: MsgBuffer,
                  clientId: InetClientHandle,
                  ): QMsgBuffer =
-  log(lvlInfo, "msgpack processing: ", repr(buffer))
+  debug("msgpack processing: ", repr(buffer))
   var req: FastRpcRequest
   buffer.unpack(req)
   var res: FastRpcResponse = router.callMethod(req, clientId)
