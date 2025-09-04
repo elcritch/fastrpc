@@ -1,5 +1,4 @@
-import std/[monotimes, os, logging, times]
-
+import std/[monotimes, logging, times]
 import fastrpc/server/fastrpcserver
 import fastrpc/server/rpcmethods
 

@@ -1,7 +1,7 @@
-import std/monotimes, std/os, std/json, std/tables
+import std/monotimes, std/json, std/tables
 import std/random, std/json
 
-import mcu_utils/[logging]
+import std/logging
 import nephyr/[times, nets]
 
 import fastrpc/server/fastrpcserver
