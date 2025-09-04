@@ -17,6 +17,9 @@ export router, servertypes, socketserver
 
 import std/times
 
+when not compiles(getProtocol(Socket())):
+  {.error: "nimSocketExtras must be defined!".}
+
 type 
 
   UdpClientOpts = object
