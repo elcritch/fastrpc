@@ -1,6 +1,9 @@
 import std/times
 import std/monotimes
 import std/logging
+import std/streams
+
+import msgpack4nim
 
 import ../utils/inettypes
 import ../utils/inetqueues
@@ -29,6 +32,15 @@ type
     udpRpcSubs*: Table[RpcSubId, UdpClientOpts]
 
 ## =================== Handle RPC Events =================== ##
+
+when system.cpuEndian == littleEndian:
+  import std/endians
+  proc unstore16(s: Stream): uint16 =
+    var tmp: uint16 = cast[uint16](s.readInt16)
+    swapEndian16(addr(result), addr(tmp))
+else:
+  proc unstore16(s: Stream): uint16 =
+    cast[uint16](s.readInt16)
 
 proc findMatchingUdpSockets(
     srv: ServerInfo[FastRpcOpts],
@@ -149,7 +161,7 @@ proc fastRpcReadHandler*(
     if buffer[].data == "":
       raise newException(InetClientDisconnected, "")
     let
-      msglen = buffer[].readUintBe16().int
+      msglen = buffer[].unstore16().int
     if buffer[].data.len() != 2 + msglen:
       raise newException(OSError, "invalid length: read: " &
                           $buffer[].data.len() & " expect: " & $(2 + msglen))
@@ -183,7 +195,7 @@ proc fastRpcExec*(router: FastRpcRouter, item: InetMsgQueueItem): bool =
 
 
 proc fastRpcTask*(router: FastRpcRouter) {.thread.} =
-  logInfo("Starting FastRpc Task")
+  info("Starting FastRpc Task")
   debug("fastrpcTask:inQueue:chan: ", repr(router.inQueue.chan.addr().pointer))
 
   var status = true
@@ -212,17 +224,17 @@ proc postServerProcessor(srv: ServerInfo[FastRpcOpts], results: seq[ReadyKey]) =
               break cidCheck
         of InetClientType.clAddress:
           let uopts = srv.getOpts().udpRpcSubs[subid]
-          let curr = millis()
+          let curr = getMonoTime()
           debug("fastrpcprocessor:cleanup:check:udp-subs:", repr uopts) 
-          if uopts.timeout == Millis(0): # unlimited udp subscription
+          if uopts.timeout == initDuration(milliseconds=0): # unlimited udp subscription
             break cidCheck
           elif uopts.ts <= curr and (curr - uopts.ts) < uopts.timeout:
-            logInfo("fastrpcprocessor:cleanup:udp-subs:timeout:", repr uopts) 
+            info("fastrpcprocessor:cleanup:udp-subs:timeout:", repr uopts) 
             break cidCheck
         else:
           discard "unhandled"
         # otherwise remove it
-        logInfo("fastrpcprocessor:cleanup:cid:", cid, "subid:", repr(subid))
+        info("fastrpcprocessor:cleanup:cid:", cid, "subid:", repr(subid))
         removes.add cid
     for cid in removes:
       subcli.subs.del(cid)
@@ -234,7 +246,7 @@ proc newFastRpcServer*(router: FastRpcRouter,
                        bufferSize = 1400,
                        prefixMsgSize = false,
                        threaded = false,
-                       udpTimeout = Millis(convert(Minutes, Milliseconds, 15)),
+                       udpTimeout = initDuration(minutes=15),
                        ): Server[FastRpcOpts] =
   new(result)
   result.readHandler = fastRpcReadHandler
