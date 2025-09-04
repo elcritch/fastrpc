@@ -1,9 +1,9 @@
 import tables, strutils, macros
 
-import mcu_utils/basictypes
-import mcu_utils/msgbuffer
-import mcu_utils/logging
-include mcu_utils/threads
+# import mcu_utils/basictypes
+import ../utils/msgbuffer
+# import mcu_utils/logging
+# include ../utils/threads
 
 import msgpack4nim
 export msgpack4nim

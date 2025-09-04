@@ -1,7 +1,7 @@
 import tables
-import mcu_utils/msgbuffer
-import mcu_utils/inettypes
-import mcu_utils/inetqueues
+import ../utils/msgbuffer
+import ../utils/inettypes
+import ../utils/inetqueues
 
 export tables, inettypes, inetqueues, msgbuffer
 

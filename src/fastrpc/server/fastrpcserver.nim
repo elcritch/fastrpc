@@ -1,8 +1,7 @@
-import mcu_utils/inettypes
-import mcu_utils/inetqueues
-import mcu_utils/timeutils
-
-include mcu_utils/threads
+import ../utils/inettypes
+import ../utils/inetqueues
+# import mcu_utils/timeutils
+# include mcu_utils/threads
 
 import router
 import ../servertypes
