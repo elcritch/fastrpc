@@ -119,6 +119,9 @@ proc streamThread*(arg: ThreadArg[seq[MonoTime], TimerOptions]) {.thread, nimcal
 
 
 when isMainModule:
+  var logger = newConsoleLogger(fmtStr=verboseFmtStr, levelThreshold=lvlDebug)
+  addHandler(logger)
+
   let inetAddrs = [
     newInetAddr("0.0.0.0", 5656, Protocol.IPPROTO_UDP),
     # newInetAddr("0.0.0.0", 5656, Protocol.IPPROTO_TCP),

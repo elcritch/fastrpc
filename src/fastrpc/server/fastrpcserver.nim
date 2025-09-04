@@ -157,6 +157,7 @@ proc fastRpcReadHandler*(
   let stype: SockType = fdkind.getSockType().get()
 
   if stype == SockType.SOCK_STREAM:
+    debug("server:fastRpcReadHandler:SOCK_STREAM")
     discard sock.recv(buffer[].data, srv.getOpts().bufferSize)
     if buffer[].data == "":
       raise newException(InetClientDisconnected, "")
@@ -167,7 +168,9 @@ proc fastRpcReadHandler*(
                           $buffer[].data.len() & " expect: " & $(2 + msglen))
     clientId = newClientHandle(sock.getFd())
   elif stype == SockType.SOCK_DGRAM:
-    discard sock.recvFrom(buffer[].data, buffer[].data.len(), host, port)
+    debug("server:fastRpcReadHandler:SOCK_DGRAM")
+    let ret = sock.recvFrom(buffer[].data, buffer[].data.len(), host, port)
+    debug("server:fastRpcReadHandler:SOCK_DGRAM:ret: ", repr(ret), "host: ", repr(host), "port: ", repr(port))
     clientId  = newClientHandle(host, port, sock.getFd())
   else:
     raise newException(ValueError, "unhandled socket type: " & $stype)
