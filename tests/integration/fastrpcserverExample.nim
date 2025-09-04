@@ -1,10 +1,9 @@
-import std/[monotimes, logging, times]
+import std/[monotimes, logging, times, os]
 import fastrpc/server/fastrpcserver
 import fastrpc/server/rpcmethods
 
 import json
 import random
-
 
 
 # Define RPC Server #
