@@ -7,6 +7,8 @@ switch("threads", "on")
 
 switch("define", "McuUtilsLoggingLevel:lvlDebug")
 
+import std/[os, strutils]
+
 task build_integration_tests, "build integration test tools":
   exec "nim c tests/integration/fastrpcserverExample.nim"
   exec "nim c tests/integration/fastrpccli.nim"
