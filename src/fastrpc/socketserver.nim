@@ -115,9 +115,9 @@ proc startSocketServer*[T](ipaddrs: openArray[InetAddress],
 
   info "[SocketServer]::", "starting"
   for ia in ipaddrs:
-    info "[SocketServer]::", "creating socket on:",
-            "ip:", $ia.host, "port:", $ia.port, $ia.inetDomain(),
-            "sockType:", $ia.socktype, $ia.protocol
+    info "[SocketServer]::", "creating socket on: ",
+            "ip: ", $ia.host, "port: ", $ia.port, "domain: ", $ia.inetDomain(),
+            "sockType: ", $ia.socktype, "protocol: ", $ia.protocol
 
     var socket = newSocket(
       domain=ia.inetDomain(),
@@ -125,7 +125,7 @@ proc startSocketServer*[T](ipaddrs: openArray[InetAddress],
       protocol=ia.protocol,
       buffered = false
     )
-    debug "[SocketServer]::", "started:", "fd:", socket.getFd().int
+    debug "[SocketServer]::", "started: ", "fd: ", socket.getFd().int, "domain: ", $ia.inetDomain(), "socktype: ", $ia.socktype, "protocol: ", $ia.protocol
 
     socket.setSockOpt(OptReuseAddr, true)
     socket .getFd().setBlocking(false)
