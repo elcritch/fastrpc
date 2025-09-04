@@ -268,7 +268,7 @@ proc call(ip: RpcIpAddress,
     jargs = if rawJsonArgs == "": %pargs else: rawJsonArgs.parseJson() 
   
   echo fmt("rpc call: name: '{name}' args: '{args}' ip:{repr ip} ")
-  echo fmt("rpc params:pargs: {repr pargs}")
+  # echo fmt("rpc params:pargs: {repr pargs}")
   echo fmt("rpc params:jargs: {repr jargs}")
   echo fmt("rpc params: {$jargs}")
 
