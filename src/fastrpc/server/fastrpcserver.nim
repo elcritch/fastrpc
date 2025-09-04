@@ -172,6 +172,8 @@ proc fastRpcReadHandler*(
     let ret = sock.recvFrom(buffer[].data, buffer[].data.len(), host, port)
     debug("server:fastRpcReadHandler:SOCK_DGRAM:ret: ", repr(ret))
     debug("server:fastRpcReadHandler:SOCK_DGRAM:", "host", repr(host), "port", repr(port))
+    if buffer[].data.len() == 0:
+      raise newException(OSError, "invalid length: empty")
     clientId  = newClientHandle(host, port, sock.getFd())
   else:
     raise newException(ValueError, "unhandled socket type: " & $stype)

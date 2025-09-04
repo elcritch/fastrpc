@@ -138,7 +138,7 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
         print("[socket mcall ipaddr: " & repr(opts.ipAddr.ipaddr) & "]")
         print("[socket mcall bytes:len: " & repr(mcall.len()) & "]")
         print("[socket mcall bytes:lenprefix: " & repr msz & "]")
-        print("[socket mcall bytes:data: " & repr(mcall[0..min(mcall.len(), 20)]) & "]")
+        print("[socket mcall bytes:data: " & repr(mcall[0..min(mcall.len()-1, 20)]) & "]")
       if opts.udp:
         client.sendTo($opts.ipAddr.ipaddr, opts.port, mcall)
       else:
