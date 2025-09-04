@@ -1,4 +1,4 @@
-import std/monotimes, std/os
+import std/[monotimes, os, times]
 
 import fastrpc/server/fastrpcserver
 import fastrpc/server/rpcmethods
@@ -36,14 +36,14 @@ DefineRpcs(name=exampleRpcs):
       os.sleep(400)
     result = "k bye"
 
-  proc simulatelongcall(cntMillis: int): Millis {.rpc.} =
+  proc simulatelongcall(cntMillis: int): Duration {.rpc.} =
 
-    let t0 = getMonoTime().ticks div 1_000_000
+    let t0 = getMonoTime()
     echo("simulatelongcall: ", )
     os.sleep(cntMillis)
-    let t1 = getMonoTime().ticks div 1_000_000
+    let t1 = getMonoTime()
 
-    return Millis(t1-t0)
+    return t1-t0
 
 
   proc testerror(msg: string): string {.rpc.} =
