@@ -8,6 +8,7 @@ import locks
 import sugar
 import terminal 
 import colors
+import posix
 
 import cligen
 from cligen/argcvt import ArgcvtParams, argKeys         # Little helpers
@@ -70,6 +71,15 @@ template timeBlock(n: string, opts: RpcOptions, blk: untyped): untyped =
   totalTime = totalTime + td.inMicroseconds()
   allTimes.add(td.inMicroseconds())
   
+
+proc setReceiveTimeout(socket: Socket, timeoutMs: int) =
+  var timeout: Timeval
+  timeout.tv_sec = posix.Time(timeoutMs div 1000)
+  timeout.tv_usec = Suseconds(timeoutMs mod 1000 * 1000)
+  
+  if setsockopt(socket.getFd(), SOL_SOCKET, SO_RCVTIMEO, 
+                addr timeout, sizeof(timeout).Socklen) != 0:
+    raise newException(OSError, "Failed to set receive timeout")
 
 
 var
@@ -202,6 +212,8 @@ proc runRpc(opts: RpcOptions, req: FastRpcRequest) =
     print(colYellow, "[connecting to server ip addr: ", $opts.ipAddr.ipstring, " port: ", $opts.port, " udp: ", $opts.udp, "]")
     if not opts.udp:
       client.connect(opts.ipAddr.ipstring, opts.port)
+    else:
+      setReceiveTimeout(client, 1000)
 
     print(colYellow, "[connected to server ip addr: ", $opts.ipAddr.ipstring,"]")
     print(colBlue, "[call: ", repr call, "]")
