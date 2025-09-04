@@ -163,14 +163,15 @@ when isMainModule:
     optionRpcs = timerOptionsRpcs,
   )
 
-  let maddr = newClientHandle("ff12::1", 2048, -1.SocketHandle, net.IPPROTO_UDP)
-  logInfo "app_net_rpc:", "multicast-addr:", repr maddr
-  let mpub = router.subscribe("microspub", maddr, timeout = 0.Millis, source = "")
-  logInfo "app_net_rpc:", "multicast-publish:", repr mpub
+  when defined(testMulticast):
+    let maddr = newClientHandle("ff12::1", 2048, -1.SocketHandle, net.IPPROTO_UDP)
+    logInfo "app_net_rpc:", "multicast-addr:", repr maddr
+    let mpub = router.subscribe("microspub", maddr, timeout = 0.Millis, source = "")
+    logInfo "app_net_rpc:", "multicast-publish:", repr mpub
 
-  # print out all our new rpc's!
-  for rpc in router.procs.keys():
-    echo "  rpc: ", rpc
+    # print out all our new rpc's!
+    for rpc in router.procs.keys():
+      echo "  rpc: ", rpc
 
   var frpcServer = newFastRpcServer(router, prefixMsgSize=true, threaded=false)
   startSocketServer(inetAddrs, frpcServer)
