@@ -1,6 +1,6 @@
 # Package
 
-version       = "0.5.5"
+version       = "0.6.0"
 author        = "Jaremy Creechley"
 description   = "fast binary rpc designed for embedded"
 license       = "Apache-2.0"
