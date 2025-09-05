@@ -49,8 +49,9 @@ proc mkParamsVars(paramsIdent, paramsType, params: NimNode): NimNode =
   result = newStmtList()
   var varList = newSeq[NimNode]()
   for paramid, paramType in paramsIter(params):
+    let localName = ident(paramid.strVal)
     varList.add quote do:
-      var `paramid`: `paramType` = `paramsIdent`.`paramid`
+      var `localName`: `paramType` = `paramsIdent`.`localName`
   result.add varList
   # echo "paramsSetup return:\n", treeRepr result
 
@@ -123,7 +124,7 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     ctxName = ident("context")
 
     # parameter type name
-    paramsIdent = genSym(nskParam, "args")
+    paramsIdent = genSym(nskVar, "rpcArgs")
     paramTypeName = ident("RpcType_" & procNameStr)
 
   var
@@ -188,11 +189,113 @@ macro rpcImpl*(p: untyped, publish: untyped, qarg: untyped): untyped =
     let qarg = params[1]
     assert qarg.kind == nnkIdentDefs and qarg[0].repr == "queue"
     let qt = qarg[1] # first param...
-    echo "PARAMS:\n", params.treeRepr
+    discard
     var rpcMethod = quote do:
       rpcQueuePacker(`rpcMethod`, `procName`, `qt`)
     # rpcMethod[3] = params
     result.add newStmtList(rpcFunc, rpcMethod)
+
+## Callback-style RPCs: router.rpc("name") do(a: T, b: U) -> R: body
+macro rpc*(router: var FastRpcRouter, path: string, cb: untyped): untyped =
+  ## Register an RPC using a callback form:
+  ##   router.rpc("add") do(a: int, b: int) -> int:
+  ##     a + b
+  ## The callback may reference `context` and use `rpcReply(...)`.
+
+  let pathStr = path.strVal
+  # Ensure we have a DO block with formal params
+  if cb.kind != nnkDo:
+    error "rpc expects a `do(...)` callback block"
+
+  var params: NimNode
+  var body: NimNode
+  if cb.len >= 7 and cb[3].kind == nnkFormalParams and cb[6].kind == nnkStmtList:
+    params = cb[3]
+    body = cb[6]
+  else:
+    error "rpc callback has malformed parameters"
+  discard
+
+  let
+    procNameStr = pathStr.makeProcName()
+    rpcMethod = ident(procNameStr)
+    ContextType = ident "RpcContext"
+    paramsIdent = genSym(nskVar, "rpcArgs")
+    paramTypeName = ident("RpcType_" & procNameStr)
+    innerName = genSym(nskProc, procNameStr & "Inner")
+
+  var
+    paramTypes = mkParamsType(paramsIdent, paramTypeName, params)
+
+  # Build inner proc formal params: (a: T, b: U, context: RpcContext) -> ReturnType
+  var innerFormal = newTree(nnkFormalParams, newEmptyNode())
+  # return type will be set below once we compute ReturnType
+  for paramid, paramType in paramsIter(params):
+    innerFormal.add newIdentDefs(ident(paramid.strVal), paramType, newEmptyNode())
+  let ctxParam = genSym(nskParam, "ctx")
+  innerFormal.add newIdentDefs(ctxParam, ContextType, newEmptyNode())
+
+  # Wrapper call args to inner proc: rpcArgs.a, rpcArgs.b, ctxPass
+  var innerCallArgs = newSeq[NimNode]()
+  for paramid, _ in paramsIter(params):
+    innerCallArgs.add newDotExpr(paramsIdent, ident(paramid.strVal))
+  let ctxPassSym = genSym(nskLet, "ctxPass")
+  innerCallArgs.add ctxPassSym
+  let innerCall = newCall(innerName, innerCallArgs)
+
+  # Determine return type
+  var ReturnType: NimNode
+  if params.hasReturnType:
+    ReturnType = params[0]
+  else:
+    # Handle form: do(args): Type: <body>
+    if body.kind == nnkStmtList and body.len == 1 and body[0].kind == nnkCall:
+      let call = body[0]
+      if call.len >= 2 and call[1].kind == nnkStmtList:
+        ReturnType = call[0]
+        body = call[1]
+      else:
+        error("rpc callback must declare a return type")
+    else:
+      error("rpc callback must declare a return type")
+
+  # set return type on innerProc formals
+  innerFormal[0] = ReturnType
+
+  # Construct inner proc with the user's body
+  # Prepend 'let context = ctxParam' so `rpcReply` templates can see it
+  var bindContext = newTree(nnkLetSection,
+    newIdentDefs(ident("context"), newEmptyNode(), ctxParam)
+  )
+  var innerBody = newStmtList(bindContext, body)
+
+  var innerProc = newTree(nnkProcDef,
+    innerName,              # name
+    newEmptyNode(),         # pattern
+    newEmptyNode(),         # generic params
+    innerFormal,            # formal params
+    newEmptyNode(),         # pragmas
+    newEmptyNode(),         # exceptions
+    innerBody               # body (user callback body, with context bound)
+  )
+  discard
+  # debug output for one expansion
+  # echo "RPC:GEN:innerFormal:\n", innerFormal.treeRepr
+  # echo "RPC:GEN:innerProc:\n", innerProc.treeRepr
+
+  # Generate wrapper proc and registration
+  result = quote do:
+    `paramTypes`
+    `innerProc`
+
+    proc `rpcMethod`(pbuf: FastRpcParamsBuffer, context: `ContextType`): FastRpcParamsBuffer {.gcsafe, nimcall.} =
+      var `paramsIdent`: `paramTypeName`
+      `paramsIdent`.rpcUnpack(pbuf)
+      let `ctxPassSym` = context
+      let ret: `ReturnType` = `innerCall`
+      result = rpcPack(ret)
+
+    register(`router`, `path`, `rpcMethod`)
 
 macro rpcOption*(p: untyped): untyped =
   result = p
