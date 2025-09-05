@@ -16,14 +16,15 @@ import strutils, sequtils
 
 template withExecHandler(name, handlerProc, blk: untyped) =
   ## check handlerProc isn't nil and handle any unexpected errors
-  try:
+  # try:
+  block:
     if handlerProc != nil:
       let `name` {.inject.} = handlerProc
       `blk`
-  except Exception as err:
-    info("[SocketServer]::", "unhandled error from server handler: ", repr `handlerProc`)
-    info("[SocketServer]::", err.msg, "socketserver")
-    srv.errorCount.inc()
+  # except Exception as err:
+  #   info("[SocketServer]::", "unhandled error from server handler: ", repr `handlerProc`)
+  #   info("[SocketServer]:: error message: ", err.msg, "socketserver")
+  #   srv.errorCount.inc()
 
 template withReceiverSocket*(name: untyped, fd: SocketHandle, modname: string, blk: untyped) =
   ## handle checking receiver sockets

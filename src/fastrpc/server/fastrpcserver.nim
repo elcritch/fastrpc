@@ -23,6 +23,9 @@ type
     timeout: Duration
     ts: MonoTime
 
+  FastRpcStats* = object
+    dropped*: int
+
   FastRpcOpts* = ref object
     router*: FastRpcRouter
     bufferSize*: int
@@ -30,6 +33,7 @@ type
     # inetQueue*: seq[InetMsgQueue]
     task*: Thread[FastRpcRouter]
     udpRpcSubs*: Table[RpcSubId, UdpClientOpts]
+    stats*: FastRpcStats
 
 ## =================== Handle RPC Events =================== ##
 
@@ -193,7 +197,8 @@ proc fastRpcReadHandler*(
 
   let res = router.inQueue.trySendMsg(clientId, buffer)
   if not res:
-    info("readHandler:router:send: dropped ")
+    debug("readHandler:router:send: dropped ")
+    inc(srv.getOpts().stats.dropped)
   debug("readHandler:router:inQueue: ", repr(router.inQueue.chan.peek()))
 
 ## =================== Execute RPC Tasks =================== ##
