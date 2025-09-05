@@ -11,25 +11,25 @@ import random
 
 
 # Define RPC Server #
-DefineRpcs(name=exampleRpcs):
+proc exampleRpcs(router: var FastRpcRouter) =
 
-  proc add(a: int, b: int): int {.rpc.} =
+  router.rpc("add") do(a: int, b: int) -> int:
     result = 1 + a + b
 
-  proc addAll(vals: seq[int]): int {.rpc.} =
+  router.rpc("addAll") do(vals: seq[int]): int:
     for val in vals:
       result = result + val
 
-  proc multAll(x: int, vals: seq[int]): seq[int] {.rpc.} =
+  router.rpc("multAll") do(x: int, vals: seq[int]): seq[int]:
     result = newSeqOfCap[int](vals.len())
     for val in vals:
       result.add val * x
 
-  proc echos(msg: string): string {.rpc.} =
+  router.rpc("echos") do(msg: string): string:
     echo("echos: ", "hello ", msg)
     result = "hello: " & msg
 
-  proc echorepeat(msg: string, count: int): string {.rpc.} =
+  router.rpc("echorepeat") do(msg: string, count: int): string:
     let rmsg = "hello " & msg
     for i in 0..count:
       echo("echos: ", rmsg)
@@ -38,7 +38,7 @@ DefineRpcs(name=exampleRpcs):
       os.sleep(400)
     result = "k bye"
 
-  proc simulatelongcall(cntMillis: int): Duration {.rpc.} =
+  router.rpc("simulatelongcall") do(cntMillis: int): Duration:
 
     let t0 = getMonoTime()
     echo("simulatelongcall: ", )
@@ -47,8 +47,7 @@ DefineRpcs(name=exampleRpcs):
 
     return t1-t0
 
-
-  proc testerror(msg: string): string {.rpc.} =
+  router.rpc("testerror") do(msg: string): string:
     echo("test error: ", "what is your favorite color?")
     if msg != "Blue":
       raise newException(ValueError, "wrong answer!")
@@ -61,23 +60,24 @@ type
     delay: Duration
     count: int
 
-DefineRpcTaskOptions[TimerOptions](name=timerOptionsRpcs):
-  proc setDelay(opt: var TimerOptions, delay: Duration): bool {.rpcSetter.} =
-    ## called by the socket server every time there's data
-    ## on the queue argument given the `rpcEventSubscriber`.
-    ## 
-    if delay < initDuration(milliseconds=10_000):
-      opt.delay = delay
-      return true
-    else:
-      return false
-  
-  proc getDelay(option: var TimerOptions): Duration {.rpcGetter.} =
-    ## called by the socket server every time there's data
-    ## on the queue argument given the `rpcEventSubscriber`.
-    ## 
-    result = option.delay
-  
+when false:
+  DefineRpcTaskOptions[TimerOptions](name=timerOptionsRpcs):
+    proc setDelay(opt: var TimerOptions, delay: Duration): bool {.rpcSetter.} =
+      ## called by the socket server every time there's data
+      ## on the queue argument given the `rpcEventSubscriber`.
+      ## 
+      if delay < initDuration(milliseconds=10_000):
+        opt.delay = delay
+        return true
+      else:
+        return false
+    
+    proc getDelay(option: var TimerOptions): Duration {.rpcGetter.} =
+      ## called by the socket server every time there's data
+      ## on the queue argument given the `rpcEventSubscriber`.
+      ## 
+      result = option.delay
+    
 
 proc timeSerializer(queue: TimerDataQ): seq[MonoTime] {.rpcSerializer.} =
   ## called by the socket server every time there's data
@@ -148,7 +148,7 @@ when isMainModule:
   var router = newFastRpcRouter()
 
   # register the `exampleRpcs` with our RPC router
-  router.registerRpcs(exampleRpcs)
+  router.exampleRpcs()
 
   when defined(testDatastream):
     # register a `datastream` with our RPC router
