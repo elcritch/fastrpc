@@ -3,8 +3,8 @@ import std/[tables, strutils, macros]
 import ../utils/msgbuffer
 import ../utils/logging
 
-import msgpack4nim
-export msgpack4nim
+import rpcserde
+export rpcserde
 
 import rpcdatatypes
 export rpcdatatypes

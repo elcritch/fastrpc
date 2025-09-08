@@ -14,11 +14,6 @@ import ../utils/inettypes
 import ../utils/inetqueues
 import ../utils/logging
 
-import msgpack4nim
-import msgpack4nim/msgpack2json
-
-export msgpack4nim, msgpack2json
-
 import protocol
 export protocol
 export options
@@ -148,29 +143,6 @@ proc listSysMethods*(rt: FastRpcRouter): seq[string] =
   for name in rt.sysprocs.keys():
     result.add name
 
-proc rpcPack*(res: FastRpcParamsBuffer): FastRpcParamsBuffer {.inline.} =
-  result = res
-
-template rpcPack*(res: JsonNode): FastRpcParamsBuffer =
-  var jpack = res.fromJsonNode()
-  var ss = MsgBuffer.init(jpack)
-  ss.setPosition(jpack.len())
-  FastRpcParamsBuffer(buf: ss)
-
-proc rpcPack*[T](res: T): FastRpcParamsBuffer =
-  var ss = MsgBuffer.init()
-  ss.pack(res)
-  result = FastRpcParamsBuffer(buf: ss)
-
-proc rpcUnpack*[T](obj: var T, ss: FastRpcParamsBuffer, resetStream = true) =
-  try:
-    if resetStream:
-      ss.buf.setPosition(0)
-    ss.buf.unpack(obj)
-  except AssertionDefect as err:
-    raise newException(ObjectConversionDefect,
-                       "unable to parse parameters: " & err.msg)
-
 template rpcQueuePacker*(procName: untyped,
                          rpcProc: untyped,
                          qt: untyped,
@@ -179,4 +151,3 @@ template rpcQueuePacker*(procName: untyped,
       result = proc (): FastRpcParamsBuffer =
         let res = `rpcProc`(queue)
         result = rpcPack(res)
-
