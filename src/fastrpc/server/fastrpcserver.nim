@@ -1,6 +1,5 @@
 import std/times
 import std/monotimes
-# import msgpack4nim
 
 import ../utils/inettypes
 import ../utils/logging
