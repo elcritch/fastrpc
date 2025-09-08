@@ -132,7 +132,9 @@ proc callMethod*(
                     err, 
                     router.stacktraces)
  
-template packResponse*(res: FastRpcResponse, size: int): QMsgBuffer =
+template packResponse*(router: FastRpcRouter,
+                       res: FastRpcResponse,
+                       size: int): QMsgBuffer =
   var so = newUniquePtr(MsgBuffer.init(size))
   msgpack4nim.pack(so[], res)
   so
@@ -145,5 +147,5 @@ proc callMethod*(router: FastRpcRouter,
   var req: FastRpcRequest
   msgpack4nim.unpack(buffer, req)
   var res: FastRpcResponse = router.callMethod(req, clientId)
-  return res.packResponse(res.result.buf.data.len() + sizeof(res))
+  return router.packResponse(res, res.result.buf.data.len() + sizeof(res))
   

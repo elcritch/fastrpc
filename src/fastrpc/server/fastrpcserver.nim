@@ -137,7 +137,7 @@ proc fastRpcEventHandler*(
     for cid, subid in subClient.subs:
       let resp: FastRpcResponse =
         wrapResponse(subid.FastRpcId, msg, kind=Publish)
-      var qmsg = resp.packResponse(msg.buf.data.len())
+      var qmsg = router.packResponse(resp, msg.buf.data.len())
       discard router.outQueue.trySendMsg(cid, qmsg)
   else:
     raise newException(ValueError, "unknown queue event: " & repr(evt))
