@@ -15,3 +15,6 @@ requires "progress >= 0.1.0"
 requires "msgpack4nim >= 0.3.1"
 requires "threading >= 0.1.0"
 requires "cligen >= 0.1.0"
+
+feature "cbor":
+  requires "https://github.com/elcritch/nim-cbor-serialization.git#5ba31d6"
