@@ -200,7 +200,7 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
       var resbuf = MsgBuffer.init(response.result.buf.data)
       var err: FastRpcError
       resbuf.setPosition(0)
-      msgpack4nim.unpack(resbuf, err)
+      rpcUnpack(resbuf, err)
       if not opts.quiet and not opts.noprint:
         print(colRed, repr err)
     else:
