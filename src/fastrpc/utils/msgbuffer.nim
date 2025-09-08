@@ -1,11 +1,11 @@
 import std/streams
-import msgpack4nim
+# import msgpack4nim
 
-type MsgBuffer* = ref object of MsgStream
+type MsgBuffer* = ref object of StringStreamObj
 
 export streams
 
-proc init*(x: typedesc[MsgBuffer], data: sink string, encodingMode = MSGPACK_OBJ_TO_DEFAULT): MsgBuffer =
+proc init*(x: typedesc[MsgBuffer], data: sink string): MsgBuffer =
   result = new x
   # Initialize StringStream base by copying fields from a new StringStream:
   var ss = newStringStream()
@@ -21,11 +21,11 @@ proc init*(x: typedesc[MsgBuffer], data: sink string, encodingMode = MSGPACK_OBJ
     result.readDataImpl = ss.readDataImpl
     result.peekDataImpl = ss.peekDataImpl
     result.writeDataImpl = ss.writeDataImpl
-  result.setEncodingMode(encodingMode)
+  # result.setEncodingMode(encodingMode)
 
 
-proc init*(x: typedesc[MsgBuffer], cap: int = 0, encodingMode = MSGPACK_OBJ_TO_DEFAULT): MsgBuffer =
-  result = init(x, newStringOfCap(cap), encodingMode)
+proc init*(x: typedesc[MsgBuffer], cap: int = 0): MsgBuffer =
+  result = init(x, newStringOfCap(cap))
 
 proc readStrRemaining*(s: MsgBuffer): string =
   let ln = s.data.len() - s.getPosition() 
