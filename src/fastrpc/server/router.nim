@@ -30,12 +30,6 @@ proc wrapResponseError*(id: FastRpcId, code: FastErrorCodes, msg: string, err: r
       errobj.trace.add( ($se.procname, file, se.line, ) )
   result = wrapResponseError(id, errobj)
 
-proc parseError*(ss: MsgBuffer): FastRpcError = 
-  msgpack4nim.unpack(ss, result)
-
-proc parseParams*[T](ss: MsgBuffer, val: var T) = 
-  msgpack4nim.unpack(ss, val)
-
 proc createRpcRouter*(): FastRpcRouter =
   result = new(FastRpcRouter)
   result.procs = initTable[string, FastRpcProc]()
