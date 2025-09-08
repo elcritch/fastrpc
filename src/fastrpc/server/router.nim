@@ -134,7 +134,7 @@ proc callMethod*(
  
 template packResponse*(res: FastRpcResponse, size: int): QMsgBuffer =
   var so = newUniquePtr(MsgBuffer.init(size))
-  so[].pack(res)
+  msgpack4nim.pack(so[], res)
   so
 
 proc callMethod*(router: FastRpcRouter,
@@ -143,7 +143,7 @@ proc callMethod*(router: FastRpcRouter,
                  ): QMsgBuffer =
   debug("msgpack processing: ", repr(buffer))
   var req: FastRpcRequest
-  buffer.unpack(req)
+  msgpack4nim.unpack(buffer, req)
   var res: FastRpcResponse = router.callMethod(req, clientId)
   return res.packResponse(res.result.buf.data.len() + sizeof(res))
   
