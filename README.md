@@ -89,7 +89,7 @@ assert msg == (5, 1, "add", (1,2))
 This would then be serialized using a MsgPack library:
 
 ```nim
-var msgbinary = msgpack4nim.pack(msg)
+var msgbinary = pack(msg)
 assert msgbinary == "\148\5\1\163add\146\1\2"
 assert msgbinary == "\x94\x05\x01\xA3add\x92\x01\x02" # hex format
 ```
@@ -97,7 +97,7 @@ assert msgbinary == "\x94\x05\x01\xA3add\x92\x01\x02" # hex format
 The response message would be:
 ```nim
 assert responseMsg == "\147\6\1\3"
-var response = msgpack4nim.unpack(responseMsg)
+var response = unpack(responseMsg)
 
 assert response == [6, 1, 3]
 assert response == [Response, 1, 3]
