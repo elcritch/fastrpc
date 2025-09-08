@@ -44,10 +44,11 @@ proc rpcPack*(so: var MsgBuffer,
               size: int) =
   msgpack4nim.pack(so, res)
 
+proc rpcPack*(buffer: var MsgBuffer, req: FastRpcRequest) =
+  msgpack4nim.pack(buffer, req)
+
 proc rpcUnpack*(buffer: MsgBuffer, req: var FastRpcRequest) =
-  var req: FastRpcRequest
   msgpack4nim.unpack(buffer, req)
 
 proc rpcUnpack*(buffer: MsgBuffer, res: var FastRpcResponse) =
-  var res: FastRpcResponse
   msgpack4nim.unpack(buffer, res)

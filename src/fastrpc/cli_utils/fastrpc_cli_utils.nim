@@ -104,7 +104,8 @@ template readResponse(): untyped =
 
     var rbuff = MsgBuffer.init(msg)
     var response: FastRpcResponse
-    msgpack4nim.unpack(rbuff, response)
+    rpcUnpack(rbuff, response)
+
     if not opts.quiet and not opts.noprint:
       print colAquamarine, "[response:kind: ", repr(response.kind), "]"
       print colAquamarine, "[read response: ", repr response, "]"
@@ -159,7 +160,7 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
     inc(id)
 
     var ss = MsgBuffer.init()
-    msgpack4nim.pack(ss, call)
+    rpcPack(ss, call)
     let mcall = ss.data
 
     template parseReultsJson(response: untyped): untyped = 
