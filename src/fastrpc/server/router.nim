@@ -31,10 +31,10 @@ proc wrapResponseError*(id: FastRpcId, code: FastErrorCodes, msg: string, err: r
   result = wrapResponseError(id, errobj)
 
 proc parseError*(ss: MsgBuffer): FastRpcError = 
-  ss.unpack(result)
+  msgpack4nim.unpack(ss, result)
 
 proc parseParams*[T](ss: MsgBuffer, val: var T) = 
-  ss.unpack(val)
+  msgpack4nim.unpack(ss, val)
 
 proc createRpcRouter*(): FastRpcRouter =
   result = new(FastRpcRouter)
