@@ -1,5 +1,4 @@
 import std/streams
-# import msgpack4nim
 
 type MsgBuffer* = ref object of StringStreamObj
 
