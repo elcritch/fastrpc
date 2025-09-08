@@ -132,7 +132,7 @@ proc callMethod*(
                     err, 
                     router.stacktraces)
  
-template packResponse*(router: FastRpcRouter,
+proc packResponse*(router: FastRpcRouter,
                        res: FastRpcResponse,
                        size: int): QMsgBuffer =
   var so = newUniquePtr(MsgBuffer.init(size))
