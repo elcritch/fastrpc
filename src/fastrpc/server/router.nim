@@ -109,7 +109,8 @@ proc callMethod*(
 proc packResponse*(router: FastRpcRouter,
                        res: FastRpcResponse,
                        size: int): QMsgBuffer =
-  return packResponse(res, size)
+  result = newUniquePtr(MsgBuffer.init(size))
+  rpcPack(result[], res, size)
 
 proc callMethod*(router: FastRpcRouter,
                  buffer: MsgBuffer,
