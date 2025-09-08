@@ -6,6 +6,16 @@ export msgpack4nim, msgpack2json
 import ./rpcdatatypes
 import ../utils/msgbuffer
 
+## MsgPack serde implementations ##
+
+proc pack_type*[ByteStream](s: ByteStream, x: FastRpcParamsBuffer) =
+  s.write(x.buf.data, x.buf.getPosition())
+
+proc unpack_type*[ByteStream](s: ByteStream, x: var FastRpcParamsBuffer) =
+  var params = s.readStrRemaining()
+  x.buf = MsgBuffer.init()
+  x.buf.data = params
+
 proc rpcPack*(res: FastRpcParamsBuffer): FastRpcParamsBuffer {.inline.} =
   result = res
 
@@ -28,3 +38,9 @@ proc rpcUnpack*[T](obj: var T, ss: FastRpcParamsBuffer, resetStream = true) =
   except AssertionDefect as err:
     raise newException(ObjectConversionDefect,
                        "unable to parse parameters: " & err.msg)
+
+proc packResponse*(res: FastRpcResponse,
+                   size: int): QMsgBuffer =
+  var so = newUniquePtr(MsgBuffer.init(size))
+  msgpack4nim.pack(so[], res)
+  so

@@ -9,15 +9,6 @@ export rpcserde
 import rpcdatatypes
 export rpcdatatypes
 
-## MsgPack serde implementations ##
-
-proc pack_type*[ByteStream](s: ByteStream, x: FastRpcParamsBuffer) =
-  s.write(x.buf.data, x.buf.getPosition())
-
-proc unpack_type*[ByteStream](s: ByteStream, x: var FastRpcParamsBuffer) =
-  var params = s.readStrRemaining()
-  x.buf = MsgBuffer.init()
-  x.buf.data = params
 
 proc createRpcRouter*(): FastRpcRouter =
   result = new(FastRpcRouter)
@@ -118,9 +109,7 @@ proc callMethod*(
 proc packResponse*(router: FastRpcRouter,
                        res: FastRpcResponse,
                        size: int): QMsgBuffer =
-  var so = newUniquePtr(MsgBuffer.init(size))
-  msgpack4nim.pack(so[], res)
-  so
+  return packResponse(res, size)
 
 proc callMethod*(router: FastRpcRouter,
                  buffer: MsgBuffer,
