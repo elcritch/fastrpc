@@ -152,24 +152,3 @@ template rpcQueuePacker*(procName: untyped,
       result = proc (): FastRpcParamsBuffer =
         let res = `rpcProc`(queue)
         result = rpcPack(res)
-
-proc wrapResponse*(id: FastRpcId, resp: FastRpcParamsBuffer, kind = Response): FastRpcResponse = 
-  result.kind = kind
-  result.id = id
-  result.result = resp
-
-proc wrapResponseError*(id: FastRpcId, err: FastRpcError): FastRpcResponse = 
-  result.kind = Error
-  result.id = id
-  var ss = MsgBuffer.init()
-  ss.pack(err)
-  result.result = FastRpcParamsBuffer(buf: ss)
-
-proc wrapResponseError*(id: FastRpcId, code: FastErrorCodes, msg: string, err: ref Exception, stacktraces: bool): FastRpcResponse = 
-  let errobj = FastRpcError(code: SERVER_ERROR, msg: msg)
-  if stacktraces and not err.isNil():
-    errobj.trace = @[]
-    for se in err.getStackTraceEntries():
-      let file: string = rsplit($(se.filename), '/', maxsplit=1)[^1]
-      errobj.trace.add( ($se.procname, file, se.line, ) )
-  result = wrapResponseError(id, errobj)

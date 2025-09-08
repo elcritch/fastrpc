@@ -4,6 +4,8 @@ import msgpack4nim/msgpack2json
 import ./rpcdatatypes
 import ../utils/msgbuffer
 
+export msgpack4nim
+
 ## MsgPack serde implementations ##
 
 proc pack_type*[ByteStream](s: ByteStream, x: FastRpcParamsBuffer) =

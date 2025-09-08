@@ -9,6 +9,28 @@ export rpcserde
 import rpcdatatypes
 export rpcdatatypes
 
+proc wrapResponse*(id: FastRpcId, resp: FastRpcParamsBuffer, kind = Response): FastRpcResponse = 
+  result.kind = kind
+  result.id = id
+  result.result = resp
+
+proc wrapResponseError*(id: FastRpcId, err: FastRpcError): FastRpcResponse = 
+  mixin rpcPack
+  result.kind = Error
+  result.id = id
+  var ss = MsgBuffer.init()
+  rpcPack(ss, err)
+  result.result = FastRpcParamsBuffer(buf: ss)
+
+proc wrapResponseError*(id: FastRpcId, code: FastErrorCodes, msg: string, err: ref Exception, stacktraces: bool): FastRpcResponse = 
+  mixin rpcPack
+  let errobj = FastRpcError(code: SERVER_ERROR, msg: msg)
+  if stacktraces and not err.isNil():
+    errobj.trace = @[]
+    for se in err.getStackTraceEntries():
+      let file: string = rsplit($(se.filename), '/', maxsplit=1)[^1]
+      errobj.trace.add( ($se.procname, file, se.line, ) )
+  result = wrapResponseError(id, errobj)
 
 proc createRpcRouter*(): FastRpcRouter =
   result = new(FastRpcRouter)
@@ -56,8 +78,10 @@ proc callMethod*(
       let hasSubProc = req.procname in router.subNames
       if not hasSubProc:
         let methodNotFound = req.procName & " is not a registered RPC method."
-        return wrapResponseError(req.id, METHOD_NOT_FOUND,
-                                 methodNotFound, nil,
+        return wrapResponseError(req.id,
+                                 METHOD_NOT_FOUND,
+                                 methodNotFound,
+                                 (ref Exception)(nil),
                                  router.stacktraces)
       let subId = router.subscribe(req.procName, clientId)
       if subId.isSome():

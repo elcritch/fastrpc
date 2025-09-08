@@ -3,7 +3,7 @@ import msgpack4nim
 
 type MsgBuffer* = ref object of MsgStream
 
-export msgpack4nim, streams
+export streams
 
 proc init*(x: typedesc[MsgBuffer], data: sink string, encodingMode = MSGPACK_OBJ_TO_DEFAULT): MsgBuffer =
   result = new x
