@@ -19,7 +19,7 @@ proc unpack_type*[ByteStream](s: ByteStream, x: var FastRpcParamsBuffer) =
 proc rpcPack*(res: FastRpcParamsBuffer): FastRpcParamsBuffer {.inline.} =
   result = res
 
-template rpcPack*(res: JsonNode): FastRpcParamsBuffer =
+proc rpcPack*(res: JsonNode): FastRpcParamsBuffer =
   var jpack = res.fromJsonNode()
   var ss = MsgBuffer.init(jpack)
   ss.setPosition(jpack.len())
