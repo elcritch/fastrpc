@@ -104,7 +104,7 @@ template readResponse(): untyped =
 
     var rbuff = MsgBuffer.init(msg)
     var response: FastRpcResponse
-    rbuff.unpack(response)
+    msgpack4nim.unpack(rbuff, response)
     if not opts.quiet and not opts.noprint:
       print colAquamarine, "[response:kind: ", repr(response.kind), "]"
       print colAquamarine, "[read response: ", repr response, "]"
@@ -137,7 +137,7 @@ template readResponse(): untyped =
 
     var rbuff = MsgBuffer.init(msg)
     var response: FastRpcResponse
-    rbuff.unpack(response)
+    msgpack4nim.unpack(rbuff, response)
 
     if not opts.quiet and not opts.noprint:
       print colAquamarine, "[response:kind: ", repr(response.kind), "]"
@@ -159,7 +159,7 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
     inc(id)
 
     var ss = MsgBuffer.init()
-    ss.pack(call)
+    msgpack4nim.pack(ss, call)
     let mcall = ss.data
 
     template parseReultsJson(response: untyped): untyped = 
@@ -199,7 +199,7 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
       var resbuf = MsgBuffer.init(response.result.buf.data)
       var err: FastRpcError
       resbuf.setPosition(0)
-      resbuf.unpack(err)
+      msgpack4nim.unpack(resbuf, err)
       if not opts.quiet and not opts.noprint:
         print(colRed, repr err)
     else:
@@ -334,7 +334,6 @@ proc call(ip: RpcIpAddress,
 
   var ss = MsgBuffer.init()
   ss.write jargs.fromJsonNode()
-  # ss.pack(jargs)
   let kind = if opts.system: SystemRequest
              elif opts.subscribe: Subscribe
              else: Request
@@ -345,7 +344,7 @@ proc call(ip: RpcIpAddress,
 
   print(colYellow, "CALL:", repr call)
   var sc = MsgBuffer.init()
-  sc.pack(call)
+  msgpack4nim.pack(sc, call)
   let mcall = sc.data
   print(colYellow, "MCALL:", repr mcall)
 
