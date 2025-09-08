@@ -1,8 +1,6 @@
 import msgpack4nim
 import msgpack4nim/msgpack2json
 
-export msgpack4nim, msgpack2json
-
 import ./rpcdatatypes
 import ../utils/msgbuffer
 
@@ -58,3 +56,9 @@ proc rpcPack*(buffer: var MsgBuffer, err: FastRpcError) =
 
 proc rpcUnpack*(buffer: MsgBuffer, err: var FastRpcError) =
   msgpack4nim.unpack(buffer, err)
+
+proc rpcToJsonNode*(buffer: MsgBuffer): JsonNode =
+  msgpack2json.toJsonNode(buffer)
+
+proc rpcFromJsonNode*(buffer: MsgBuffer, node: JsonNode) =
+  msgpack2json.fromJsonNode(buffer, node)

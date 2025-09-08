@@ -135,7 +135,7 @@ template readResponse(): untyped =
 
     var rbuff = MsgBuffer.init(msg)
     var response: FastRpcResponse
-    msgpack4nim.unpack(rbuff, response)
+    rpcUnpack(rbuff, response)
 
     if not opts.quiet and not opts.noprint:
       print colAquamarine, "[response:kind: ", repr(response.kind), "]"
@@ -144,7 +144,7 @@ template readResponse(): untyped =
 
 template prettyPrintResults(response: untyped): untyped = 
   var resbuf = MsgBuffer.init(response.result.buf.data)
-  mnode = resbuf.toJsonNode()
+  mnode = resbuf.rpcToJsonNode()
   if not opts.noprint and not opts.noresults:
     if opts.prettyPrint:
       print(colOrange, pretty(mnode))
@@ -162,7 +162,7 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
 
     template parseReultsJson(response: untyped): untyped = 
       var resbuf = MsgBuffer.init(response.result.buf.data)
-      resbuf.toJsonNode()
+      resbuf.rpcToJsonNode()
 
     timeBlock("call", opts):
       let msz = mcall.len().int16.toStrBe16()
@@ -182,7 +182,7 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
 
     if opts.subscribe:
       var resbuf = MsgBuffer.init(response.result.buf.data)
-      mnode = resbuf.toJsonNode()
+      mnode = resbuf.rpcToJsonNode()
       if not opts.quiet and not opts.noprint:
         print colAquamarine, "[response:kind: ", repr(response.kind), "]"
       response = readResponse()
@@ -260,7 +260,7 @@ proc runRpc(opts: RpcOptions, req: FastRpcRequest) =
 
       if mb != "":
         try:
-          let res = mb.toJsonNode()
+          let res = MsgBuffer.init(mb).rpcToJsonNode()
           print("subscription: ", $res)
         except Exception:
           print(colRed, "[exception: ", getCurrentExceptionMsg() ,"]")
@@ -331,7 +331,8 @@ proc call(ip: RpcIpAddress,
   let margs = %* {"method": name, "params": % jargs }
 
   var ss = MsgBuffer.init()
-  ss.write jargs.fromJsonNode()
+  ss.rpcFromJsonNode(jargs)
+
   let kind = if opts.system: SystemRequest
              elif opts.subscribe: Subscribe
              else: Request
