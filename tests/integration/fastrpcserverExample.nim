@@ -33,7 +33,6 @@ proc exampleRpcs(router: var FastRpcRouter) =
     let rmsg = "hello " & msg
     for i in 0..count:
       echo("echos: ", rmsg)
-      # discard context.sender(rmsg)
       discard rpcReply(rmsg)
       os.sleep(400)
     result = "k bye"
