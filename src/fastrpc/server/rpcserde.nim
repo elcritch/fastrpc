@@ -37,7 +37,7 @@ proc rpcUnpack*[T](obj: var T, ss: FastRpcParamsBuffer, resetStream = true) =
     raise newException(ObjectConversionDefect,
                        "unable to parse parameters: " & err.msg)
 
-proc rpcPack*(buffer: var MsgBuffer, req: FastRpcRequest) =
+proc rpcPack*(buffer: MsgBuffer, req: FastRpcRequest) =
   msgpack4nim.pack(buffer, req)
 
 proc rpcUnpack*(buffer: MsgBuffer, req: var FastRpcRequest) =

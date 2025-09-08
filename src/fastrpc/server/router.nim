@@ -118,7 +118,7 @@ proc callMethod*(router: FastRpcRouter,
                  ): QMsgBuffer =
   debug("msgpack processing: ", repr(buffer))
   var req: FastRpcRequest
-  msgpack4nim.unpack(buffer, req)
+  rpcUnpack(buffer, req)
   var res: FastRpcResponse = router.callMethod(req, clientId)
   return router.packResponse(res, res.result.buf.data.len() + sizeof(res))
   

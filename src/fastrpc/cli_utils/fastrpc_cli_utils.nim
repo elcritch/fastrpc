@@ -343,7 +343,7 @@ proc call(ip: RpcIpAddress,
 
   print(colYellow, "CALL:", repr call)
   var sc = MsgBuffer.init()
-  msgpack4nim.pack(sc, call)
+  rpcPack(sc, call)
   let mcall = sc.data
   print(colYellow, "MCALL:", repr mcall)
 
