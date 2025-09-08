@@ -53,13 +53,3 @@ type
     msg*: string
     trace*: seq[(string, string, int)]
 
-
-## MsgPack serde implementations ##
-
-proc pack_type*[ByteStream](s: ByteStream, x: FastRpcParamsBuffer) =
-  s.write(x.buf.data, x.buf.getPosition())
-
-proc unpack_type*[ByteStream](s: ByteStream, x: var FastRpcParamsBuffer) =
-  var params = s.readStrRemaining()
-  x.buf = MsgBuffer.init()
-  x.buf.data = params

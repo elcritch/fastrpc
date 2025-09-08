@@ -17,6 +17,7 @@ import msgpack4nim
 import msgpack4nim/msgpack2json
 
 import ../server/protocol
+import ../server/router
 import ../servertypes
 
 enableTrueColors()

@@ -9,6 +9,16 @@ export msgpack4nim
 import rpcdatatypes
 export rpcdatatypes
 
+## MsgPack serde implementations ##
+
+proc pack_type*[ByteStream](s: ByteStream, x: FastRpcParamsBuffer) =
+  s.write(x.buf.data, x.buf.getPosition())
+
+proc unpack_type*[ByteStream](s: ByteStream, x: var FastRpcParamsBuffer) =
+  var params = s.readStrRemaining()
+  x.buf = MsgBuffer.init()
+  x.buf.data = params
+
 proc wrapResponse*(id: FastRpcId, resp: FastRpcParamsBuffer, kind = Response): FastRpcResponse = 
   result.kind = kind
   result.id = id
