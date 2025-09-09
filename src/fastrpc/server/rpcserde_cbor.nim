@@ -31,27 +31,27 @@ proc rpcUnpack*[T](obj: var T, ss: FastRpcParamsBuffer, resetStream = true) =
                        "unable to parse parameters: " & err.msg)
 
 proc rpcPack*(buffer: MsgBuffer, req: FastRpcRequest) =
-  msgpack4nim.pack(buffer, req)
+  Cbor.encode(buffer, req)
 
 proc rpcUnpack*(buffer: MsgBuffer, req: var FastRpcRequest) =
-  msgpack4nim.unpack(buffer, req)
+  Cbor.decode(buffer, req)
 
 proc rpcPack*(so: var MsgBuffer,
               res: FastRpcResponse,
               size: int) =
-  msgpack4nim.pack(so, res)
+  Cbor.encode(so, res)
 
 proc rpcUnpack*(buffer: MsgBuffer, res: var FastRpcResponse) =
-  msgpack4nim.unpack(buffer, res)
+  Cbor.decode(buffer, res)
 
 proc rpcPack*(buffer: var MsgBuffer, err: FastRpcError) =
-  msgpack4nim.pack(buffer, err)
+  Cbor.encode(buffer, err)
 
 proc rpcUnpack*(buffer: MsgBuffer, err: var FastRpcError) =
-  msgpack4nim.unpack(buffer, err)
+  Cbor.decode(buffer, err)
 
 proc rpcToJsonNode*(buffer: MsgBuffer): JsonNode =
-  msgpack2json.toJsonNode(buffer)
+  Cbor.toJsonNode(buffer)
 
 proc rpcFromJsonNode*(buffer: MsgBuffer, node: JsonNode) =
-  msgpack2json.fromJsonNode(buffer, node)
+  Cbor.fromJsonNode(buffer, node)
