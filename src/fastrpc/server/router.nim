@@ -3,8 +3,12 @@ import std/[tables, strutils, macros]
 import ../utils/msgbuffer
 import ../utils/logging
 
-import rpcserde
-export rpcserde
+when defined(fastRpcCbor):
+  import rpcserde_cbor
+  export rpcserde_cbor
+else:
+  import rpcserde_mpack
+  export rpcserde_mpack
 
 import rpcdatatypes
 export rpcdatatypes
