@@ -1,9 +1,9 @@
-import cbor_serialization
+import cborious
 
 import ./rpcdatatypes
 import ../utils/msgbuffer
 
-export cbor_serialization
+export cborious
 
 ## MsgPack serde implementations ##
 
