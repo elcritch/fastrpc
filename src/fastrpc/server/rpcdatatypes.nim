@@ -26,7 +26,7 @@ const MaxRpcMethodNameLength* {.intdefine: "fastrpc.maxMethodNameLength".} = 128
 
 type
 
-  RpcMethodName* = RpcMethodName
+  RpcMethodName* = StackString[MaxRpcMethodNameLength]
 
   FastRpcErrorStackTrace* = object
     code*: int
