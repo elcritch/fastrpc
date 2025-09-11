@@ -6,11 +6,16 @@ import stack_strings
 
 export tables, inettypes, inetqueues, msgbuffer, stack_strings
 
-const MaxRpcMethodNameLength* {.intdefine: "fastrpc.maxMethodNameLength".} = 64
+const MaxRpcMethodNameLength* {.intdefine: "fastrpc.maxMethodNameLength".} = 32
+
+when defined(fastRpcStackStrings):
+  type
+    RpcMethodName* = StackString[MaxRpcMethodNameLength]
+else:
+  type
+    RpcMethodName* = string
 
 type
-  RpcMethodName* = StackString[MaxRpcMethodNameLength]
-
   FastErrorCodes* = enum
     # Error messages
     FAST_PARSE_ERROR = -27
@@ -59,4 +64,13 @@ type
     trace*: seq[(string, string, int)]
 
 proc toMethodName*(s: string): RpcMethodName =
-  result = s.toStackString(MaxRpcMethodNameLength)
+  when defined(fastRpcStackStrings):
+    result = s.toStackString(MaxRpcMethodNameLength)
+  else:
+    result = s
+
+proc toString*(s: RpcMethodName): string =
+  when defined(fastRpcStackStrings):
+    result = stack_strings.toString(s)
+  else:
+    result = s
