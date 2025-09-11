@@ -339,7 +339,7 @@ proc call(ip: RpcIpAddress,
              else: Request
   var call = FastRpcRequest(kind: kind,
                             id: 1,
-                            procName: name.toStackString(64),
+                            procName: name.toMethodName(),
                             params: FastRpcParamsBuffer(buf: ss))
 
   print(colYellow, "CALL:", repr call)

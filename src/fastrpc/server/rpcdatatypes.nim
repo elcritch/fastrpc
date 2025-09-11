@@ -22,11 +22,7 @@ import protocol
 export protocol
 export options
 
-const MaxRpcMethodNameLength* {.intdefine: "fastrpc.maxMethodNameLength".} = 128
-
 type
-
-  RpcMethodName* = StackString[MaxRpcMethodNameLength]
 
   FastRpcErrorStackTrace* = object
     code*: int

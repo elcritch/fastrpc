@@ -44,19 +44,19 @@ proc register*(router: var FastRpcRouter;
                path: string,
                evt: SelectEvent,
                serializer: RpcStreamSerializerClosure) =
-  let path = path.toStackString(64)
+  let path = path.toMethodName()
   router.subNames[path] = evt
   let subs = newTable[InetClientHandle, RpcSubId]()
   router.subEventProcs[evt] = RpcSubClients(eventProc: serializer, subs: subs)
   debug "registering:sub: ", path
 
 proc register*(router: var FastRpcRouter, path: string, call: FastRpcProc) =
-  let path = path.toStackString(64)
+  let path = path.toMethodName()
   router.procs[path] = call
   debug "registering: ", path
 
 proc sysRegister*(router: var FastRpcRouter, path: string, call: FastRpcProc) =
-  let path = path.toStackString(64)
+  let path = path.toMethodName()
   router.sysprocs[path] = call
   debug "registering: sys: ", path
 
@@ -64,7 +64,7 @@ proc clear*(router: var FastRpcRouter) =
   router.procs.clear
 
 proc hasMethod*(router: FastRpcRouter, methodName: string): bool =
-  router.procs.hasKey(methodName.toStackString(64))
+  router.procs.hasKey(methodName.toMethodName())
 
 proc callMethod*(
         router: FastRpcRouter,
