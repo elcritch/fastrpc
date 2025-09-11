@@ -26,7 +26,7 @@ const MaxRpcMethodNameLength* {.intdefine: "fastrpc.maxMethodNameLength".} = 128
 
 type
 
-  RpcMethodName* = StackString[64]
+  RpcMethodName* = RpcMethodName
 
   FastRpcErrorStackTrace* = object
     code*: int
@@ -60,10 +60,10 @@ type
     subs*: TableRef[InetClientHandle, RpcSubId]
 
   FastRpcRouter* = ref object
-    procs*: Table[StackString[64], FastRpcProc]
-    sysprocs*: Table[StackString[64], FastRpcProc]
+    procs*: Table[RpcMethodName, FastRpcProc]
+    sysprocs*: Table[RpcMethodName, FastRpcProc]
     subEventProcs*: Table[SelectEvent, RpcSubClients]
-    subNames*: Table[StackString[64], SelectEvent]
+    subNames*: Table[RpcMethodName, SelectEvent]
     stacktraces*: bool
     subscriptionTimeout*: Duration
     inQueue*: InetMsgQueue
@@ -102,8 +102,8 @@ proc newFastRpcRouter*(
     registerQueueSize = 2,
 ): FastRpcRouter =
   new(result)
-  result.procs = initTable[StackString[64], FastRpcProc]()
-  result.sysprocs = initTable[StackString[64], FastRpcProc]()
+  result.procs = initTable[RpcMethodName, FastRpcProc]()
+  result.sysprocs = initTable[RpcMethodName, FastRpcProc]()
   result.subEventProcs = initTable[SelectEvent, RpcSubClients]()
   result.stacktraces = defined(debug)
 
@@ -119,7 +119,7 @@ proc newFastRpcRouter*(
 
 proc subscribe*(
     router: FastRpcRouter,
-    procName: StackString[64],
+    procName: RpcMethodName,
     clientId: InetClientHandle,
     timeout = initDuration(milliseconds= -1),
     source = "",

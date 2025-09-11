@@ -41,7 +41,7 @@ type
   FastRpcRequest* = object
     kind*: FastRpcType
     id*: FastRpcId
-    procName*: StackString[64]
+    procName*: RpcMethodName
     params*: FastRpcParamsBuffer # - we handle params below
 
   FastRpcResponse* = object

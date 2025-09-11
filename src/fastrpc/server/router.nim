@@ -38,7 +38,7 @@ proc wrapResponseError*(id: FastRpcId, code: FastErrorCodes, msg: string, err: r
 
 proc createRpcRouter*(): FastRpcRouter =
   result = new(FastRpcRouter)
-  result.procs = initTable[StackString[64], FastRpcProc]()
+  result.procs = initTable[RpcMethodName, FastRpcProc]()
 
 proc register*(router: var FastRpcRouter;
                path: string,
