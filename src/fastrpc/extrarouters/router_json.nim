@@ -105,6 +105,7 @@ proc createRpcRouter*(): RpcRouter =
   result.procs = initTable[string, RpcProc]()
 
 proc register*(router: var RpcRouter, path: string, call: RpcProc) =
+  let path = path.toStackString(64)
   router.procs[path] = call
 
 proc clear*(router: var RpcRouter) = router.procs.clear

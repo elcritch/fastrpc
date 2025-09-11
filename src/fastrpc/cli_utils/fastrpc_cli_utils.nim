@@ -9,6 +9,7 @@ import sugar
 import terminal 
 import colors
 import posix
+import stack_strings
 
 import cligen
 from cligen/argcvt import ArgcvtParams, argKeys         # Little helpers
@@ -338,7 +339,7 @@ proc call(ip: RpcIpAddress,
              else: Request
   var call = FastRpcRequest(kind: kind,
                             id: 1,
-                            procName: name,
+                            procName: name.toStackString(64),
                             params: FastRpcParamsBuffer(buf: ss))
 
   print(colYellow, "CALL:", repr call)

@@ -15,3 +15,6 @@ tests/integration/fastrpccli
 tests/integration/fastrpcserver
 nim.cfg
 deps/
+nimble.develop
+nimble.paths
+nimbledeps

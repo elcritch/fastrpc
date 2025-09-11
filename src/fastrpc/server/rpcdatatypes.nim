@@ -15,12 +15,19 @@ import ../utils/inettypes
 import ../utils/inetqueues
 import ../utils/logging
 
+import stack_strings
+export stack_strings
+
 import protocol
 export protocol
 export options
 
+const MaxRpcMethodNameLength* {.intdefine: "fastrpc.maxMethodNameLength".} = 128
 
 type
+
+  RpcMethodName* = StackString[64]
+
   FastRpcErrorStackTrace* = object
     code*: int
     msg*: string
@@ -53,10 +60,10 @@ type
     subs*: TableRef[InetClientHandle, RpcSubId]
 
   FastRpcRouter* = ref object
-    procs*: Table[string, FastRpcProc]
-    sysprocs*: Table[string, FastRpcProc]
+    procs*: Table[StackString[64], FastRpcProc]
+    sysprocs*: Table[StackString[64], FastRpcProc]
     subEventProcs*: Table[SelectEvent, RpcSubClients]
-    subNames*: Table[string, SelectEvent]
+    subNames*: Table[StackString[64], SelectEvent]
     stacktraces*: bool
     subscriptionTimeout*: Duration
     inQueue*: InetMsgQueue
@@ -95,8 +102,8 @@ proc newFastRpcRouter*(
     registerQueueSize = 2,
 ): FastRpcRouter =
   new(result)
-  result.procs = initTable[string, FastRpcProc]()
-  result.sysprocs = initTable[string, FastRpcProc]()
+  result.procs = initTable[StackString[64], FastRpcProc]()
+  result.sysprocs = initTable[StackString[64], FastRpcProc]()
   result.subEventProcs = initTable[SelectEvent, RpcSubClients]()
   result.stacktraces = defined(debug)
 
@@ -112,7 +119,7 @@ proc newFastRpcRouter*(
 
 proc subscribe*(
     router: FastRpcRouter,
-    procName: string,
+    procName: StackString[64],
     clientId: InetClientHandle,
     timeout = initDuration(milliseconds= -1),
     source = "",
@@ -136,13 +143,13 @@ proc listMethods*(rt: FastRpcRouter): seq[string] =
   ## list the methods in the given router. 
   result = newSeqOfCap[string](rt.procs.len())
   for name in rt.procs.keys():
-    result.add name
+    result.add name.toString()
 
 proc listSysMethods*(rt: FastRpcRouter): seq[string] =
   ## list the methods in the given router. 
   result = newSeqOfCap[string](rt.sysprocs.len())
   for name in rt.sysprocs.keys():
-    result.add name
+    result.add name.toString()
 
 template rpcQueuePacker*(procName: untyped,
                          rpcProc: untyped,

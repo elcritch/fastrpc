@@ -2,8 +2,9 @@ import tables
 import ../utils/msgbuffer
 import ../utils/inettypes
 import ../utils/inetqueues
+import stack_strings
 
-export tables, inettypes, inetqueues, msgbuffer
+export tables, inettypes, inetqueues, msgbuffer, stack_strings
 
 type
   FastErrorCodes* = enum
@@ -40,7 +41,7 @@ type
   FastRpcRequest* = object
     kind*: FastRpcType
     id*: FastRpcId
-    procName*: string
+    procName*: StackString[64]
     params*: FastRpcParamsBuffer # - we handle params below
 
   FastRpcResponse* = object

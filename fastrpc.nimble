@@ -15,6 +15,7 @@ requires "progress >= 0.1.0"
 requires "msgpack4nim >= 0.3.1"
 requires "threading >= 0.1.0"
 requires "cligen >= 0.1.0"
+requires "stack_strings"
 
 feature "cbor":
   requires "https://github.com/elcritch/cborious.git >= 0.5.0"

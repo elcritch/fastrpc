@@ -38,22 +38,25 @@ proc wrapResponseError*(id: FastRpcId, code: FastErrorCodes, msg: string, err: r
 
 proc createRpcRouter*(): FastRpcRouter =
   result = new(FastRpcRouter)
-  result.procs = initTable[string, FastRpcProc]()
+  result.procs = initTable[StackString[64], FastRpcProc]()
 
 proc register*(router: var FastRpcRouter;
                path: string,
                evt: SelectEvent,
                serializer: RpcStreamSerializerClosure) =
+  let path = path.toStackString(64)
   router.subNames[path] = evt
   let subs = newTable[InetClientHandle, RpcSubId]()
   router.subEventProcs[evt] = RpcSubClients(eventProc: serializer, subs: subs)
   debug "registering:sub: ", path
 
 proc register*(router: var FastRpcRouter, path: string, call: FastRpcProc) =
+  let path = path.toStackString(64)
   router.procs[path] = call
   debug "registering: ", path
 
 proc sysRegister*(router: var FastRpcRouter, path: string, call: FastRpcProc) =
+  let path = path.toStackString(64)
   router.sysprocs[path] = call
   debug "registering: sys: ", path
 
@@ -61,7 +64,7 @@ proc clear*(router: var FastRpcRouter) =
   router.procs.clear
 
 proc hasMethod*(router: FastRpcRouter, methodName: string): bool =
-  router.procs.hasKey(methodName)
+  router.procs.hasKey(methodName.toStackString(64))
 
 proc callMethod*(
         router: FastRpcRouter,
@@ -81,7 +84,7 @@ proc callMethod*(
       debug "CALL:METHOD: SUBSCRIBE"
       let hasSubProc = req.procname in router.subNames
       if not hasSubProc:
-        let methodNotFound = req.procName & " is not a registered RPC method."
+        let methodNotFound = req.procName.toString() & " is not a registered RPC method."
         return wrapResponseError(req.id,
                                  METHOD_NOT_FOUND,
                                  methodNotFound,
@@ -106,7 +109,7 @@ proc callMethod*(
                   router.stacktraces)
 
     if rpcProc.isNil:
-      let msg = req.procName & " is not a registered RPC method."
+      let msg = req.procName.toString() & " is not a registered RPC method."
       let err = FastRpcError(code: METHOD_NOT_FOUND, msg: msg)
       result = wrapResponseError(req.id, err)
     else:
@@ -123,14 +126,14 @@ proc callMethod*(
         result = wrapResponseError(
                     req.id,
                     INVALID_PARAMS,
-                    req.procName & " raised an exception",
+                    req.procName.toString() & " raised an exception",
                     err, 
                     router.stacktraces)
       except CatchableError as err:
         result = wrapResponseError(
                     req.id,
                     INTERNAL_ERROR,
-                    req.procName & " raised an exception",
+                    req.procName.toString() & " raised an exception",
                     err, 
                     router.stacktraces)
  
