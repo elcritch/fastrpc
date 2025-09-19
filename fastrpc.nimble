@@ -18,4 +18,4 @@ requires "cligen >= 0.1.0"
 requires "stack_strings"
 
 feature "cbor":
-  requires "https://github.com/elcritch/cborious.git >= 0.5.0"
+  requires "https://github.com/elcritch/cborious"
