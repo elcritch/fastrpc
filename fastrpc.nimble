@@ -17,4 +17,4 @@ requires "threading >= 0.1.0"
 requires "cligen >= 0.1.0"
 
 feature "cbor":
-  requires "https://github.com/elcritch/nim-cbor-serialization.git#5ba31d6"
+  requires "https://github.com/elcritch/cborious"
