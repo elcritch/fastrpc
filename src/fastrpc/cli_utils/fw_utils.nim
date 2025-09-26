@@ -1,23 +1,17 @@
-
-import json, tables, strutils, macros, options
+import json, strutils
 import net, os, streams
 import times
-import stats
-import sequtils
-import locks
-import times
 
-import msgpack4nim
 import msgpack4nim/msgpack2json
-import parseopt
 
 import std/sha1
 
-# var p = initOptParser("-ab -e:5 --foo --bar=20 file.txt")
-var p = initOptParser()
+const
+  DefaultWaitAfterRebootMs* = 15_000
+  BuffSz* = 512
 
 type
-  CliColors = enum
+  CliColors* = enum
     black,
     red,
     green,
@@ -27,8 +21,22 @@ type
     cyan,
     grey
 
+  FlashOptions* = object
+    firmwarePath*: string
+    ipAddress*: string
+    port*: Port
+    forceUpload*: bool
+    prettyPrint*: bool
+    quiet*: bool
+    silent*: bool
+    waitAfterRebootMs*: Natural
+
+  FlashResult* = object
+    uploadedBytes*: int
+    verifyResponse*: JsonNode
+
 proc echo*(color: CliColors, text: varargs[string]) =
-  case color:
+  case color
   of black:
     stdout.write "\e[30m"
   of red:
@@ -50,192 +58,178 @@ proc echo*(color: CliColors, text: varargs[string]) =
   stdout.write "\e[0m\n"
   stdout.flushFile()
 
+proc log(opts: FlashOptions; parts: varargs[string]) =
+  if opts.silent:
+    return
+  for part in parts:
+    stdout.write part
+  stdout.write "\n"
+  stdout.flushFile()
 
-var firmware_binary = ""
-var ipAddr = ""
-var forceUpload = false
-var port = Port(5555)
-var prettyPrint = false
+proc log(opts: FlashOptions; color: CliColors; parts: varargs[string]) =
+  if opts.silent:
+    return
+  color.echo(parts)
 
-for kind, key, val in p.getopt():
-  case kind
-  of cmdArgument:
-    firmware_binary = key
-  of cmdLongOption, cmdShortOption:
-    case key
-    of "ip", "i":
-      ipAddr = val
-    of "force", "f":
-      forceUpload = parseBool(val)
-    of "port", "p":
-      port = Port(parseInt(val))
-  of cmdEnd: assert(false) # cannot happen
-
-if ipAddr == "":
-  # no filename has been given, so we show the help
-  raise newException(ValueError, "missing ip address")
-
-# Check IP address
-try:
-  discard parseIpAddress(ipAddr)
-except CatchableError as err:
-  echo "invalid IP address, check the --ip:$IP argument"
-  raise err
-  
-var totalTime = 0'i64
-var totalCalls = 0'i64
-
-template timeBlock(n: string, blk: untyped): untyped =
+template timeBlock(name: string, opts: FlashOptions, blk: untyped): untyped =
   let t0 = getTime()
   blk
-
   let td = getTime() - t0
-  echo grey, "[took: ", $(td.inMicroseconds().float() / 1e3), " millis]"
-  
+  if not (opts.quiet or opts.silent):
+    log(opts, grey, "[took: ", $(td.inMicroseconds().float() / 1e3), " millis]")
 
-var
-  id: int = 0
+proc validateFirmwareFile(path: string) =
+  if not path.endsWith(".bin"):
+    raise newException(ValueError, "Firmware file must end with `.bin`.")
+  if not path.fileExists():
+    raise newException(IOError, "Firmware file does not exist: " & path)
 
-const RPC_TIMEOUT = 30_000
-
-proc execRpc(client: Socket, i: var int, call: JsonNode, quiet=false): JsonNode = 
+proc execRpc(client: Socket,
+             requestId: var int,
+             call: JsonNode,
+             opts: FlashOptions,
+             silence=false): JsonNode =
   {.cast(gcsafe).}:
-    call["id"] = %* id
-    call["jsonrpc"] = %* "2.0"
-    inc(id)
+    var rpcCall = call
+    rpcCall["id"] = %* requestId
+    rpcCall["jsonrpc"] = %* "2.0"
+    inc(requestId)
 
-    let mcall = 
+    let payload =
       when defined(TcpJsonRpcServer):
-        $call
+        $rpcCall
       else:
-        call.fromJsonNode()
+        rpcCall.fromJsonNode()
 
-    timeBlock("call"):
-      client.send( mcall )
-      var msgLenBytes = client.recv(4)
+    var msgLenBytes: string
+    var msg = ""
+
+    timeBlock("call", opts):
+      if opts.quiet or silence:
+        client.send(payload)
+      else:
+        log(opts, yellow, "[sending payload of size ", $(payload.len()), "]")
+        client.send(payload)
+      msgLenBytes = client.recv(4)
+      if msgLenBytes.len() == 0:
+        return
       var msgLen: int32 = 0
-
-      if msgLenBytes.len() == 0: return
-      for i in countdown(3,0):
+      for i in countdown(3, 0):
         msgLen = (msgLen shl 8) or int32(msgLenBytes[i])
-
-      var msg = ""
       while msg.len() < msgLen:
-        let mb = client.recv(4*1024)
-        msg.add mb
+        let remaining = msgLen - msg.len()
+        let readLen = if remaining < 4 * 1024: remaining else: 4 * 1024
+        let part = client.recv(readLen)
+        msg.add(part)
 
-    if not quiet:
-      echo grey, "[read bytes: " & $msg.len() & "]"
+    if not (opts.quiet or silence):
+      log(opts, grey, "[recv bytes: ", $msg.len(), "]")
 
-    var mnode = 
+    let mnode =
       when defined(TcpJsonRpcServer):
         msg
       else:
         msg.toJsonNode()
 
-    if not quiet:
-      echo()
-      if prettyPrint:
-        echo(blue, pretty(mnode))
-      else:
-        echo(blue, $(mnode))
+    if not (opts.quiet or silence):
+      log(opts, blue, "[response: ", $(mnode), "]")
 
     if mnode.hasKey("result") and mnode["result"].kind == JString:
-      var res: string = mnode["result"].getStr()
+      let res = mnode["result"].getStr()
       try:
-        var rnode = res.toJsonNode()
-        # echo(grey, "mpack result: " & $rnode)
-      except:
-        discard "ok"
+        discard res.toJsonNode()
+      except CatchableError:
+        discard
 
-    if not quiet:
-      echo green, "[rpc done at " & $now() & "]"
+    if not (opts.quiet or silence):
+      log(opts, green, "[rpc done at ", $now(), "]")
 
     mnode
 
-const BUFF_SZ* = 512
+proc runFirmwareRpc(opts: FlashOptions,
+                    fwStrm: Stream,
+                    requestId: var int): FlashResult =
+  var client = newSocket(buffered=false)
+  try:
+    client.connect(opts.ipAddress, opts.port)
+    log(opts, yellow, "[connected to ", opts.ipAddress, ":", $opts.port, "]")
 
-# proc sha1_hash*(val: string, hash: string) =
-    # let sh = $secureHash(val)
-    # if sh != hash:
-      # raise newException(ValueError, "incorrect hash")
+    log(opts, blue, "Uploaded Firmware header...")
+    let hdrChunk = fwStrm.readStr(BuffSz)
+    let hdrSha1 = $secureHash(hdrChunk)
+    let hdrCall: JsonNode = %* {"method": "firmware-begin", "params": [hdrChunk, hdrSha1]}
 
-proc runFirmwareRpc(fw_strm: Stream) = 
-  {.cast(gcsafe).}:
+    if not (opts.quiet or opts.silent):
+      log(opts, blue, "hdr chunk len: ", $hdrChunk.len(), " sha1: ", hdrSha1)
+    let hdrResNode = client.execRpc(requestId, hdrCall, opts)
 
-    var client: Socket = newSocket(buffered=false)
-    client.connect(ipAddr, port)
-    echo(yellow, "[connected to server ip addr: ", ipAddr,"]")
+    if not (opts.quiet or opts.silent):
+      log(opts, blue, "WARNING: chunk_len result: ", $hdrResNode)
 
-    echo blue, "Uploaded Firmware header..."
-    let
-      hdr_chunk = fw_strm.readStr(BUFF_SZ)
-      hdr_sh1 = $secureHash(hdr_chunk)
-      hdr_chunk_call: JsonNode = %* {"method": "firmware-begin", "params": [hdr_chunk, hdr_sh1]}
-    
-    echo blue, "hdr chunk call: len: ", $hdr_chunk.len(), " sha1: ", $hdr_chunk_call["params"][1]
-    let
-      hdr_res_node: JsonNode = client.execRpc(id, hdr_chunk_call)
-
-    echo blue, "WARNING: chunk_len: " & " result: " & $hdr_res_node
-
-    let res = to(hdr_res_node["result"], seq[string])
-    if res[0] != "ok":
-      if forceUpload:
-        echo yellow, "Warning: trying to upload incorrect firmware version: " & $res[1]
+    let res = to(hdrResNode["result"], seq[string])
+    if res.len() == 0 or res[0] != "ok":
+      if opts.forceUpload:
+        log(opts, yellow, "Warning: uploading firmware despite version mismatch: ",
+            if res.len() > 1: res[1] else: "unknown")
       else:
-        raise newException(ValueError, "trying to upload incorrect firmware version: " & $res[1])
+        raise newException(ValueError,
+          "Firmware version mismatch: " & (if res.len() > 1: res[1] else: "unknown"))
 
-    while not fw_strm.atEnd():
-      let chunk = fw_strm.readStr(BUFF_SZ)
-      let chunk_sh1 = $secureHash(chunk)
+    while not fwStrm.atEnd():
+      let chunk = fwStrm.readStr(BuffSz)
+      let chunkSha1 = $secureHash(chunk)
+      if not (opts.quiet or opts.silent):
+        log(opts, blue, "Uploading bytes: ", $chunk.len())
+      let chunkCall: JsonNode = %* {"method": "firmware-chunk", "params": [chunk, chunkSha1, requestId]}
+      let chunkResNode = client.execRpc(requestId, chunkCall, opts, silence=true)
+      let chunkRes = to(chunkResNode["result"], int)
+      log(opts, yellow, "Uploaded bytes: ", $chunkRes)
 
-      echo blue, "Uploading bytes: " & $(chunk.len())
-      # This only works with MsgPack as written since the strings are raw binary -- you'd need base64 encoding to use JSON
-      let
-        chunk_res_node = client.execRpc(id, %* {"method": "firmware-chunk", "params": [chunk, chunk_sh1, id]}, quiet=true)
-        chunk_res = to(chunk_res_node["result"], int)
-      
-      echo yellow, "Uploaded bytes: " & $chunk_res
+    let finishCall: JsonNode = %* {"method": "firmware-finish", "params": ["0"]}
+    let finishResNode = client.execRpc(requestId, finishCall, opts)
+    let finishRes = to(finishResNode["result"], int)
+    result.uploadedBytes = finishRes
+    log(opts, yellow, "Uploaded total bytes: ", $finishRes)
 
-    let
-      fnl_res_node = client.execRpc(id, %* {"method": "firmware-finish", "params": ["0"]})
-      fnl_res = to(fnl_res_node["result"], int)
-
-    echo yellow, "Uploaded total bytes: " & $fnl_res
-
-    echo red, "Rebooting..." & $fnl_res
+    log(opts, red, "Rebooting device...")
     try:
-      discard client.execRpc(id, %* {"method": "espReboot", "params": []}, quiet=false)
-    except:
-      discard "expect timeout..."
-
+      discard client.execRpc(requestId, %* {"method": "espReboot", "params": []}, opts)
+    except CatchableError:
+      if not (opts.quiet or opts.silent):
+        log(opts, yellow, "Expected timeout during reboot.")
+  finally:
     client.close()
 
-    sleep(15_000)
+  if opts.waitAfterRebootMs > 0:
+    sleep(opts.waitAfterRebootMs.int)
 
-    client = newSocket(buffered=false)
-    client.connect(ipAddr, port)
-    echo(yellow, "[connected to server ip addr: ", ipAddr,"]")
+  client = newSocket(buffered=false)
+  try:
+    client.connect(opts.ipAddress, opts.port)
+    log(opts, yellow, "[reconnected to ", opts.ipAddress, ":", $opts.port, "]")
 
-    echo blue, "Uploaded Firmware header..."
-    let
-      finalizer_res: JsonNode = client.execRpc(id, %* {"method": "firmware-verify", "params": []})
+    let verifyCall: JsonNode = %* {"method": "firmware-verify", "params": []}
+    result.verifyResponse = client.execRpc(requestId, verifyCall, opts)
+    if opts.prettyPrint:
+      log(opts, blue, pretty(result.verifyResponse))
+    else:
+      log(opts, blue, $(result.verifyResponse))
+  finally:
+    client.close()
 
-    echo("finalized: ", $finalizer_res)
+proc flashFirmware*(opts: FlashOptions): FlashResult =
+  if opts.ipAddress.len == 0:
+    raise newException(ValueError, "Missing target IP address.")
+  validateFirmwareFile(opts.firmwarePath)
 
-    echo("\n")
+  var fwStrm = newFileStream(opts.firmwarePath, fmRead)
+  if fwStrm.isNil:
+    raise newException(IOError, "Failed to open firmware file: " & opts.firmwarePath)
 
+  log(opts, "Checking firmware file: ", opts.firmwarePath)
 
-echo "Checking Firmware file: " & firmware_binary 
-
-if not firmware_binary.endsWith(".bin"):
-  echo "Firmware file doesn't end with `.bin`"
-  quit(1)
-
-if not firmware_binary.fileExists():
-  echo "Firmware file doesn't exist!"
-
-var fw_strm = newFileStream(firmware_binary, fmRead)
-
-runFirmwareRpc(fw_strm)
+  var requestId = 0
+  try:
+    result = runFirmwareRpc(opts, fwStrm, requestId)
+  finally:
+    fwStrm.close()

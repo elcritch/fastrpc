@@ -6,8 +6,6 @@ import stats
 import sequtils
 import locks
 import sugar
-import terminal 
-import colors
 import posix
 
 import cligen
@@ -19,19 +17,8 @@ import msgpack4nim/msgpack2json
 import ../server/protocol
 import ../servertypes
 
-enableTrueColors()
-proc print*(text: varargs[string]) =
-  stdout.write(text)
-  stdout.write("\n")
-  stdout.flushFile()
-
-proc print*(color: Color, text: varargs[string]) =
-  stdout.setForegroundColor(color)
-
-  stdout.write text
-  stdout.write "\n"
-  stdout.setForegroundColor(fgDefault)
-  stdout.flushFile()
+import ./fw_utils
+import ./cli_tools
 
 
 type 
@@ -351,6 +338,36 @@ proc call(ip: RpcIpAddress,
   if not opts.dryRun:
     opts.runRpc(call)
 
+proc flash(ip: RpcIpAddress,
+           firmware: string,
+           port=Port(5555),
+           force=false,
+           pretty=false,
+           quiet=false,
+           silent=false,
+           waitAfterRebootMs=DefaultWaitAfterRebootMs) =
+
+  if waitAfterRebootMs < 0:
+    raise newException(ValueError, "waitAfterRebootMs must be >= 0")
+
+  let flashOpts = FlashOptions(firmwarePath: firmware,
+                               ipAddress: ip.ipstring,
+                               port: port,
+                               forceUpload: force,
+                               prettyPrint: pretty,
+                               quiet: quiet,
+                               silent: silent,
+                               waitAfterRebootMs: Natural(waitAfterRebootMs))
+
+  try:
+    let result = flashFirmware(flashOpts)
+    if not silent:
+      print(colGreen, fmt("flash completed: uploaded {result.uploadedBytes} bytes"))
+  except CatchableError as err:
+    if not silent:
+      print(colRed, "flash failed: ", err.msg)
+    quit(1)
+
 proc run_cli*() =
   proc argParse(dst: var RpcIpAddress, dfl: RpcIpAddress, a: var ArgcvtParams): bool =
     try:
@@ -372,7 +389,7 @@ proc run_cli*() =
   proc argHelp(dfl: Port; a: var ArgcvtParams): seq[string] =
     argHelp($(dfl), a)
 
-  dispatchMulti([call])
+  dispatchMulti([call], [flash])
 
 when isMainModule:
   run_cli()
