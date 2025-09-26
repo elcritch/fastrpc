@@ -118,12 +118,6 @@ proc runRpc(opts: RpcOptions, req: FastRpcRequest) =
     print(colYellow, "[socket server: domain: ", $domain, " protocol: ", $protocol, "]")
     let client: Socket = newSocket(buffered=false, domain=domain, sockType=sockType, protocol=protocol, )
 
-    # var aiList = getAddrInfo(opts.ipAddr.ipstring, opts.port, domain)
-    # print(colMagenta, "aiList: ", repr aiList)
-    # let sa = cast[ptr SockAddr_in6](aiList.ai_addr)
-    # print(colMagenta, "aiList: ", repr sa)
-    # print(colMagenta, "sockaddr: ", aiList.ai_addr.getAddrString())
-
     print(colYellow, "[connecting to server ip addr: ", $opts.ipAddr.ipstring, " port: ", $opts.port, " udp: ", $opts.udp, "]")
     if not opts.udp:
       client.connect(opts.ipAddr.ipstring, opts.port)
@@ -134,10 +128,7 @@ proc runRpc(opts: RpcOptions, req: FastRpcRequest) =
     print(colBlue, "[call: ", repr call, "]")
 
     for i in 1..opts.count:
-      # try:
         discard client.execRpc(i, call, opts)
-      # except Exception:
-        # print(colRed, "[exception: ", getCurrentExceptionMsg() ,"]")
 
     var mb = newString(4096)
     while opts.keepalive:
