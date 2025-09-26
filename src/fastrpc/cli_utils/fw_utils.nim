@@ -7,6 +7,7 @@ import msgpack4nim/msgpack2json
 import std/sha1
 
 import ./cli_tools
+import ../client/clients as frpcc
 
 const
   DefaultWaitAfterRebootMs* = 15_000
@@ -34,95 +35,49 @@ proc validateFirmwareFile(path: string) =
   if not path.fileExists():
     raise newException(IOError, "Firmware file does not exist: " & path)
 
-proc execRpc(client: Socket,
-             requestId: var int,
-             call: JsonNode,
-             opts: FlashOptions,
-             silence=false): JsonNode =
-  {.cast(gcsafe).}:
-    var rpcCall = call
-    rpcCall["id"] = %* requestId
-    rpcCall["jsonrpc"] = %* "2.0"
-    inc(requestId)
+proc execRpcJson(cli: var frpcc.FastRpcClient,
+                 mname: string,
+                 params: JsonNode,
+                 opts: FlashOptions,
+                 silence=false): JsonNode =
+  ## Execute an RPC via FastRpcClient and return the result as JsonNode.
+  var mnode: JsonNode
+  timeBlock("call", opts):
+    if not (opts.quiet or silence) and not opts.silent:
+      print(colYellow, "[sending payload of size ", $(params.len), "]")
+    mnode = frpcc.callJson(cli, mname, params)
 
-    let payload =
-      when defined(TcpJsonRpcServer):
-        $rpcCall
-      else:
-        rpcCall.fromJsonNode()
-
-    var msgLenBytes: string
-    var msg = ""
-
-    timeBlock("call", opts):
-      if opts.quiet or silence:
-        client.send(payload)
-      else:
-        if not opts.silent:
-          print(colYellow, "[sending payload of size ", $(payload.len()), "]")
-        client.send(payload)
-      msgLenBytes = client.recv(4)
-      if msgLenBytes.len() == 0:
-        return
-      var msgLen: int32 = 0
-      for i in countdown(3, 0):
-        msgLen = (msgLen shl 8) or int32(msgLenBytes[i])
-      while msg.len() < msgLen:
-        let remaining = msgLen - msg.len()
-        let readLen = if remaining < 4 * 1024: remaining else: 4 * 1024
-        let part = client.recv(readLen)
-        msg.add(part)
-
-    if not (opts.quiet or silence):
-      if not opts.silent:
-        print(colGray, "[recv bytes: ", $msg.len(), "]")
-
-    let mnode =
-      when defined(TcpJsonRpcServer):
-        msg
-      else:
-        msg.toJsonNode()
-
-    if not (opts.quiet or silence):
-      if not opts.silent:
-        print(colBlue, "[response: ", $(mnode), "]")
-
-    if mnode.hasKey("result") and mnode["result"].kind == JString:
-      let res = mnode["result"].getStr()
-      try:
-        discard res.toJsonNode()
-      except CatchableError:
-        discard
-
-    if not (opts.quiet or silence):
-      if not opts.silent:
-        print(colGreen, "[rpc done at ", $now(), "]")
-
-    mnode
+  if not (opts.quiet or silence) and not opts.silent:
+    print(colBlue, "[response: ", $(mnode), "]")
+    print(colGreen, "[rpc done at ", $now(), "]")
+  mnode
 
 proc runFirmwareRpc(opts: FlashOptions,
                     fwStrm: Stream,
                     requestId: var int): FlashResult =
-  var client = newSocket(buffered=false)
+  ## Connect via FastRpcClient (TCP), then perform firmware RPCs.
+  var sock = newSocket(buffered=false)
   try:
-    client.connect(opts.ipAddress, opts.port)
+    sock.connect(opts.ipAddress, opts.port)
     if not opts.silent:
       print(colYellow, "[connected to ", opts.ipAddress, ":", $opts.port, "]")
+
+    var cli = frpcc.newFastRpcClientTcp(sock)
 
     if not opts.silent:
       print(colBlue, "Uploaded Firmware header...")
     let hdrChunk = fwStrm.readStr(BuffSz)
     let hdrSha1 = $secureHash(hdrChunk)
-    let hdrCall: JsonNode = %* {"method": "firmware-begin", "params": [hdrChunk, hdrSha1]}
+    let hdrArgs: JsonNode = %* [hdrChunk, hdrSha1]
 
     if not opts.quiet and not opts.silent:
       print(colBlue, "hdr chunk len: ", $hdrChunk.len(), " sha1: ", hdrSha1)
-    let hdrResNode = client.execRpc(requestId, hdrCall, opts)
+    let hdrResNode = execRpcJson(cli, "firmware-begin", hdrArgs, opts)
 
     if not opts.quiet and not opts.silent:
-      print(colBlue, "WARNING: chunk_len result: ", $hdrResNode)
+      print(colBlue, "WARNING: chunk_len result: ", $(hdrResNode))
 
-    let res = to(hdrResNode["result"], seq[string])
+    let res = to(hdrResNode, seq[string])
     if res.len() == 0 or res[0] != "ok":
       if opts.forceUpload:
         if not opts.silent:
@@ -137,15 +92,16 @@ proc runFirmwareRpc(opts: FlashOptions,
       let chunkSha1 = $secureHash(chunk)
       if not opts.quiet and not opts.silent:
         print(colBlue, "Uploading bytes: ", $chunk.len())
-      let chunkCall: JsonNode = %* {"method": "firmware-chunk", "params": [chunk, chunkSha1, requestId]}
-      let chunkResNode = client.execRpc(requestId, chunkCall, opts, silence=true)
-      let chunkRes = to(chunkResNode["result"], int)
+      let chunkArgs: JsonNode = %* [chunk, chunkSha1, requestId]
+      let chunkResNode = execRpcJson(cli, "firmware-chunk", chunkArgs, opts, silence=true)
+      let chunkRes = to(chunkResNode, int)
+      inc requestId
       if not opts.silent:
         print(colYellow, "Uploaded bytes: ", $chunkRes)
 
-    let finishCall: JsonNode = %* {"method": "firmware-finish", "params": ["0"]}
-    let finishResNode = client.execRpc(requestId, finishCall, opts)
-    let finishRes = to(finishResNode["result"], int)
+    let finishArgs: JsonNode = %* ["0"]
+    let finishResNode = execRpcJson(cli, "firmware-finish", finishArgs, opts)
+    let finishRes = to(finishResNode, int)
     result.uploadedBytes = finishRes
     if not opts.silent:
       print(colYellow, "Uploaded total bytes: ", $finishRes)
@@ -153,24 +109,23 @@ proc runFirmwareRpc(opts: FlashOptions,
     if not opts.silent:
       print(colRed, "Rebooting device...")
     try:
-      discard client.execRpc(requestId, %* {"method": "espReboot", "params": []}, opts)
+      discard execRpcJson(cli, "espReboot", %* [], opts)
     except CatchableError:
       if not opts.quiet and not opts.silent:
         print(colYellow, "Expected timeout during reboot.")
   finally:
-    client.close()
+    sock.close()
 
   if opts.waitAfterRebootMs > 0:
     sleep(opts.waitAfterRebootMs.int)
 
-  client = newSocket(buffered=false)
+  sock = newSocket(buffered=false)
   try:
-    client.connect(opts.ipAddress, opts.port)
+    sock.connect(opts.ipAddress, opts.port)
     if not opts.silent:
       print(colYellow, "[reconnected to ", opts.ipAddress, ":", $opts.port, "]")
-
-    let verifyCall: JsonNode = %* {"method": "firmware-verify", "params": []}
-    result.verifyResponse = client.execRpc(requestId, verifyCall, opts)
+    var cli2 = frpcc.newFastRpcClientTcp(sock)
+    result.verifyResponse = execRpcJson(cli2, "firmware-verify", %* [], opts)
     if opts.prettyPrint:
       if not opts.silent:
         print(colBlue, pretty(result.verifyResponse))
@@ -178,7 +133,7 @@ proc runFirmwareRpc(opts: FlashOptions,
       if not opts.silent:
         print(colBlue, $(result.verifyResponse))
   finally:
-    client.close()
+    sock.close()
 
 proc flashFirmware*(opts: FlashOptions): FlashResult =
   if opts.ipAddress.len == 0:
