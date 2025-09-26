@@ -39,29 +39,33 @@ proc logRequestDetails(opts: RpcOptions, result: RpcCallResult) =
       result.payload[0 .. min(result.payload.high, 20)]
   print("[socket mcall bytes:data: " & repr(preview) & "]")
 
-proc logResponseEntry(opts: RpcOptions, entry: RpcResponseEntry) =
+proc logResponseEntry(opts: RpcOptions, entry: RpcResponse) =
   if not shouldLog(opts):
     return
 
+  let raw = entry.msg.data
   if opts.udp:
-    print(colGray, "[udp socket data: " & repr(entry.raw) & "]")
-    print(colGray, "[udp read bytes: ", $entry.raw.len(), "]")
+    print(colGray, "[udp socket data: " & repr(raw) & "]")
+    print(colGray, "[udp read bytes: ", $raw.len(), "]")
   else:
-    print(colGray, "[read bytes: ", $entry.raw.len(), "]")
-    print(colGray, "[read: " & repr(entry.raw) & "]")
+    print(colGray, "[read bytes: ", $raw.len(), "]")
+    print(colGray, "[read: " & repr(raw) & "]")
 
-  print(colAquamarine, "[response:kind: ", repr(entry.response.kind), "]")
-  print(colAquamarine, "[read response: ", repr(entry.response), "]")
+  print(colAquamarine, "[response:phase: ", repr(entry.kind), "]")
+  print(colAquamarine, "[response:rpkind: ", repr(entry.rpcKind), "]")
 
-  if entry.error.isSome:
-    print(colRed, repr(entry.error.get()))
-    return
+  if entry.rpcKind == Error:
+    let errOpt = decodeError(entry)
+    if errOpt.isSome:
+      print(colRed, repr(errOpt.get()))
+      return
 
   if entry.kind == rrAck or opts.noresults:
     return
 
-  if entry.json.isSome:
-    let node = entry.json.get()
+  let jopt = responseToJson(entry)
+  if jopt.isSome:
+    let node = jopt.get()
     if opts.prettyPrint:
       print(colOrange, pretty(node))
     else:

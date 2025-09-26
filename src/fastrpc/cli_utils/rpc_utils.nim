@@ -52,19 +52,20 @@ type
     response*: FastRpcResponse
     raw*: string
 
-  RpcResponseEntry* = object
-    kind*: RpcResponseKind
-    response*: FastRpcResponse
-    raw*: string
-    json*: Option[JsonNode]
-    error*: Option[FastRpcError]
+  # Simplified response for callers: just classify phase and expose payload stream
+  RpcResponse* = object
+    ## A simplified, phase-classified response with raw message payload
+    kind*: RpcResponseKind       ## ack/publish/final within this RPC exchange
+    rpcKind*: FastRpcType        ## underlying RPC type (Response/Error/Publish/...)
+    id*: FastRpcId               ## RPC id associated with this response
+    msg*: MsgBuffer              ## raw payload as a MsgStream/MsgBuffer
 
   RpcCallResult* = object
     callId*: FastRpcId
     payload*: string
     lengthPrefix*: string
     durationMicros*: int64
-    responses*: seq[RpcResponseEntry]
+    responses*: seq[RpcResponse]
 
   KeepAliveMessage* = object
     raw*: string
@@ -154,17 +155,15 @@ proc decodeError*(response: FastRpcResponse): Option[FastRpcError] =
   except CatchableError:
     none(FastRpcError)
 
-proc toResponseEntry*(raw: RawRpcResponse,
-                      kind: RpcResponseKind,
-                      decodeJson = true,
-                      decodeErrors = true): RpcResponseEntry =
-  result = RpcResponseEntry(kind: kind,
-                            response: raw.response,
-                            raw: raw.raw)
-  if decodeJson:
-    result.json = responseToJson(raw.response)
-  if decodeErrors and raw.response.kind == Error:
-    result.error = decodeError(raw.response)
+proc toRpcResponse*(raw: RawRpcResponse,
+                    kind: RpcResponseKind): RpcResponse =
+  ## Convert a raw wire response to the simplified RpcResponse + payload stream
+  result = RpcResponse(
+    kind: kind,
+    rpcKind: raw.response.kind,
+    id: FastRpcId(raw.response.id),
+    msg: raw.response.result.buf,
+  )
 
 proc readRawResponse*(client: Socket, udp: bool): Option[RawRpcResponse] =
   var response: FastRpcResponse
@@ -222,11 +221,39 @@ proc rawResponseToJson*(raw: RawRpcResponse): Option[JsonNode] =
 proc rawResponseError*(raw: RawRpcResponse): Option[FastRpcError] =
   decodeError(raw.response)
 
+# New helpers focused on the simplified RpcResponse/MsgStream
+proc responseToJson*(resp: RpcResponse): Option[JsonNode] =
+  ## Convert the RpcResponse payload to JSON (if it is JSON-serializable)
+  try:
+    var resbuf = MsgBuffer.init(resp.msg.data)
+    resbuf.setPosition(0)
+    some(resbuf.toJsonNode())
+  except CatchableError:
+    none(JsonNode)
+
+proc msgStreamToJson*(stream: MsgBuffer): Option[JsonNode] =
+  ## Convert a MsgStream/MsgBuffer directly into JsonNode
+  try:
+    var resbuf = MsgBuffer.init(stream.data)
+    resbuf.setPosition(0)
+    some(resbuf.toJsonNode())
+  except CatchableError:
+    none(JsonNode)
+
+proc decodeError*(resp: RpcResponse): Option[FastRpcError] =
+  ## Attempt to decode an error object from the payload
+  try:
+    var resbuf = MsgBuffer.init(resp.msg.data)
+    resbuf.setPosition(0)
+    var err: FastRpcError
+    resbuf.unpack(err)
+    some(err)
+  except CatchableError:
+    none(FastRpcError)
+
 proc execRpc*(client: Socket,
               call: FastRpcRequest,
-              opts: var RpcOptions,
-              decodeJson = true,
-              decodeErrors = true): RpcCallResult {.gcsafe.} =
+              opts: var RpcOptions): RpcCallResult {.gcsafe.} =
   let ctx = prepareRpcRequest(call, opts)
 
   var callResult = RpcCallResult(callId: ctx.request.id,
@@ -246,7 +273,7 @@ proc execRpc*(client: Socket,
   var raw = responseOpt.get()
 
   if opts.subscribe:
-    callResult.responses.add(toResponseEntry(raw, rrAck, decodeJson, decodeErrors))
+    callResult.responses.add(toRpcResponse(raw, rrAck))
     responseOpt = readRawResponse(client, opts.udp)
     if responseOpt.isNone:
       callResult.durationMicros = (getTime() - start).inMicroseconds()
@@ -258,7 +285,7 @@ proc execRpc*(client: Socket,
   if raw.response.kind == Publish:
     let (publishes, finalOpt) = collectPublishRawResponses(client, opts, raw)
     for publish in publishes:
-      callResult.responses.add(toResponseEntry(publish, rrPublish, decodeJson, decodeErrors))
+      callResult.responses.add(toRpcResponse(publish, rrPublish))
 
     if finalOpt.isNone:
       callResult.durationMicros = (getTime() - start).inMicroseconds()
@@ -275,13 +302,24 @@ proc execRpc*(client: Socket,
         sleep(opts.delay)
       return callResult
 
-  callResult.responses.add(toResponseEntry(raw, rrFinal, decodeJson, decodeErrors))
+  callResult.responses.add(toRpcResponse(raw, rrFinal))
   callResult.durationMicros = (getTime() - start).inMicroseconds()
 
   if opts.delay > 0:
     sleep(opts.delay)
 
   callResult
+
+proc publish*(client: Socket,
+              call: FastRpcRequest,
+              opts: var RpcOptions): RpcCallResult {.gcsafe.} =
+  ## Convenience wrapper to perform a publish/subscribe style call.
+  ## Adjusts call/opts for subscription and delegates to execRpc.
+  var subCall = call
+  subCall.kind = Subscribe
+  var subOpts = opts
+  subOpts.subscribe = true
+  result = execRpc(client, subCall, subOpts)
 
 proc recvKeepAlive*(client: Socket,
                     opts: RpcOptions,
