@@ -19,8 +19,8 @@ proc print*(color: Color, text: varargs[string]) =
   stdout.setForegroundColor(fgDefault)
   stdout.flushFile()
 
-var totalTime = 0'i64
-var totalCalls = 0'i64
+var totalTime* = 0'i64
+var totalCalls* = 0'i64
 
 var
   id*: int = 1
