@@ -39,6 +39,17 @@ proc setUdpDestination*(c: var FastRpcClient, host: string, port: Port) =
   ## Update/set the UDP destination for this client.
   c.dest = some((host, port))
 
+when defined(posix):
+  import std/posix
+  proc setReceiveTimeout*(socket: Socket, timeoutMs: int) =
+    var timeout: Timeval
+    timeout.tv_sec = posix.Time(timeoutMs div 1000)
+    timeout.tv_usec = Suseconds(timeoutMs mod 1000 * 1000)
+
+    if setsockopt(socket.getFd(), SOL_SOCKET, SO_RCVTIMEO,
+                  addr timeout, sizeof(timeout).Socklen) != 0:
+      raise newException(OSError, "Failed to set receive timeout")
+
 proc nextRequestId(c: var FastRpcClient): FastRpcId =
   if c.nextId <= 0: c.nextId = 1
   result = c.nextId
