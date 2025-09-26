@@ -20,7 +20,6 @@ import ../servertypes
 import ./fw_utils
 import ./cli_tools
 
-
 type 
   RpcIpAddress = object
     ipstring: string
@@ -39,84 +38,11 @@ type
     noresults: bool
     prettyPrint: bool
     quiet: bool
+    noprint: bool
     system: bool
     subscribe: bool
     dryRun: bool
-    noprint: bool
 
-var totalTime = 0'i64
-var totalCalls = 0'i64
-
-
-var
-  id: int = 1
-  allTimes = newSeq[int64]()
-
-template readResponse(): untyped = 
-  if opts.udp:
-    # UDP responses are a single datagram without a length prefix
-    var address: IpAddress
-    var port: Port
-    var msg = newString(65535)
-    let count = client.recvFrom(msg, msg.len(), address, port)
-    if count == 0:
-      print(colGray, "[udp socket read: 0, return]")
-      return
-    msg.setLen(count)
-    if not opts.quiet and not opts.noprint:
-      print(colGray, "[udp socket data: " & repr(msg) & "]")
-      print colGray, "[udp read bytes: ", $msg.len(), "]"
-
-    var rbuff = MsgBuffer.init(msg)
-    var response: FastRpcResponse
-    rbuff.unpack(response)
-    if not opts.quiet and not opts.noprint:
-      print colAquamarine, "[response:kind: ", repr(response.kind), "]"
-      print colAquamarine, "[read response: ", repr response, "]"
-    response
-  else:
-    # TCP responses are length-prefixed (2 bytes, big-endian)
-    var msgLenBytes = client.recv(2, timeout = -1)
-    if msgLenBytes.len() == 0:
-      print(colGray, "[socket read: 0, return]")
-      return
-    var msgLen: int16 = msgLenBytes.fromStrBe16()
-    if not opts.quiet and not opts.noprint:
-      print(colGray, "[socket read:data:lenstr: " & repr(msgLenBytes) & "]")
-      print(colGray, "[socket read:data:len: " & repr(msgLen) & "]")
-
-    var msg = ""
-    while msg.len() < msgLen:
-      if not opts.quiet and not opts.noprint:
-        print(colGray, "[reading msg]")
-      let mb = client.recv(msgLen - msg.len(), timeout = -1)
-      if not opts.quiet and not opts.noprint:
-        print(colGray, "[read bytes: " & $mb.len() & "]")
-      msg.add mb
-    if not opts.quiet and not opts.noprint:
-      print(colGray, "[socket data: " & repr(msg) & "]")
-
-    if not opts.quiet and not opts.noprint:
-      print colGray, "[read bytes: ", $msg.len(), "]"
-      print colGray, "[read: ", repr(msg), "]"
-
-    var rbuff = MsgBuffer.init(msg)
-    var response: FastRpcResponse
-    rbuff.unpack(response)
-
-    if not opts.quiet and not opts.noprint:
-      print colAquamarine, "[response:kind: ", repr(response.kind), "]"
-      print colAquamarine, "[read response: ", repr response, "]"
-    response
-
-template prettyPrintResults(response: untyped): untyped = 
-  var resbuf = MsgBuffer.init(response.result.buf.data)
-  mnode = resbuf.toJsonNode()
-  if not opts.noprint and not opts.noresults:
-    if opts.prettyPrint:
-      print(colOrange, pretty(mnode))
-    else:
-      print(colOrange, $(mnode))
 
 proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions): JsonNode = 
   {.cast(gcsafe).}:
@@ -143,7 +69,7 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
       else:
         client.send( msz & mcall )
 
-      var response = readResponse()
+      var response = readResponse(opts)
 
     var mnode: JsonNode
 
@@ -152,13 +78,13 @@ proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions
       mnode = resbuf.toJsonNode()
       if not opts.quiet and not opts.noprint:
         print colAquamarine, "[response:kind: ", repr(response.kind), "]"
-      response = readResponse()
+      response = readResponse(opts)
 
     while response.kind == Publish:
       mnode = response.parseReultsJson()
       response.prettyPrintResults()
 
-      response = readResponse()
+      response = readResponse(opts)
 
     if response.kind == Error:
       var resbuf = MsgBuffer.init(response.result.buf.data)

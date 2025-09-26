@@ -21,6 +21,7 @@ type
     prettyPrint*: bool
     quiet*: bool
     silent*: bool
+    noprint*: bool
     waitAfterRebootMs*: Natural
 
   FlashResult* = object
