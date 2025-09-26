@@ -27,21 +27,6 @@ type
     uploadedBytes*: int
     verifyResponse*: JsonNode
 
-template printUnlessSilent(opts: FlashOptions; body: untyped) =
-  if not opts.silent:
-    body
-
-template printVerbose(opts: FlashOptions; body: untyped) =
-  if not (opts.quiet or opts.silent):
-    body
-
-template timeBlock(name: string, opts: FlashOptions, blk: untyped): untyped =
-  let t0 = getTime()
-  blk
-  let td = getTime() - t0
-  printVerbose(opts):
-    print(colGray, "[took: ", $(td.inMicroseconds().float() / 1e3), " millis]")
-
 proc validateFirmwareFile(path: string) =
   if not path.endsWith(".bin"):
     raise newException(ValueError, "Firmware file must end with `.bin`.")
@@ -72,7 +57,7 @@ proc execRpc(client: Socket,
       if opts.quiet or silence:
         client.send(payload)
       else:
-        printUnlessSilent(opts):
+        if not opts.silent:
           print(colYellow, "[sending payload of size ", $(payload.len()), "]")
         client.send(payload)
       msgLenBytes = client.recv(4)
@@ -88,7 +73,7 @@ proc execRpc(client: Socket,
         msg.add(part)
 
     if not (opts.quiet or silence):
-      printUnlessSilent(opts):
+      if not opts.silent:
         print(colGray, "[recv bytes: ", $msg.len(), "]")
 
     let mnode =
@@ -98,7 +83,7 @@ proc execRpc(client: Socket,
         msg.toJsonNode()
 
     if not (opts.quiet or silence):
-      printUnlessSilent(opts):
+      if not opts.silent:
         print(colBlue, "[response: ", $(mnode), "]")
 
     if mnode.hasKey("result") and mnode["result"].kind == JString:
@@ -109,7 +94,7 @@ proc execRpc(client: Socket,
         discard
 
     if not (opts.quiet or silence):
-      printUnlessSilent(opts):
+      if not opts.silent:
         print(colGreen, "[rpc done at ", $now(), "]")
 
     mnode
@@ -120,26 +105,26 @@ proc runFirmwareRpc(opts: FlashOptions,
   var client = newSocket(buffered=false)
   try:
     client.connect(opts.ipAddress, opts.port)
-    printUnlessSilent(opts):
+    if not opts.silent:
       print(colYellow, "[connected to ", opts.ipAddress, ":", $opts.port, "]")
 
-    printUnlessSilent(opts):
+    if not opts.silent:
       print(colBlue, "Uploaded Firmware header...")
     let hdrChunk = fwStrm.readStr(BuffSz)
     let hdrSha1 = $secureHash(hdrChunk)
     let hdrCall: JsonNode = %* {"method": "firmware-begin", "params": [hdrChunk, hdrSha1]}
 
-    printVerbose(opts):
+    if not opts.quiet and not opts.silent:
       print(colBlue, "hdr chunk len: ", $hdrChunk.len(), " sha1: ", hdrSha1)
     let hdrResNode = client.execRpc(requestId, hdrCall, opts)
 
-    printVerbose(opts):
+    if not opts.quiet and not opts.silent:
       print(colBlue, "WARNING: chunk_len result: ", $hdrResNode)
 
     let res = to(hdrResNode["result"], seq[string])
     if res.len() == 0 or res[0] != "ok":
       if opts.forceUpload:
-        printUnlessSilent(opts):
+        if not opts.silent:
           print(colYellow, "Warning: uploading firmware despite version mismatch: ",
                 if res.len() > 1: res[1] else: "unknown")
       else:
@@ -149,27 +134,27 @@ proc runFirmwareRpc(opts: FlashOptions,
     while not fwStrm.atEnd():
       let chunk = fwStrm.readStr(BuffSz)
       let chunkSha1 = $secureHash(chunk)
-      printVerbose(opts):
+      if not opts.quiet and not opts.silent:
         print(colBlue, "Uploading bytes: ", $chunk.len())
       let chunkCall: JsonNode = %* {"method": "firmware-chunk", "params": [chunk, chunkSha1, requestId]}
       let chunkResNode = client.execRpc(requestId, chunkCall, opts, silence=true)
       let chunkRes = to(chunkResNode["result"], int)
-      printUnlessSilent(opts):
+      if not opts.silent:
         print(colYellow, "Uploaded bytes: ", $chunkRes)
 
     let finishCall: JsonNode = %* {"method": "firmware-finish", "params": ["0"]}
     let finishResNode = client.execRpc(requestId, finishCall, opts)
     let finishRes = to(finishResNode["result"], int)
     result.uploadedBytes = finishRes
-    printUnlessSilent(opts):
+    if not opts.silent:
       print(colYellow, "Uploaded total bytes: ", $finishRes)
 
-    printUnlessSilent(opts):
+    if not opts.silent:
       print(colRed, "Rebooting device...")
     try:
       discard client.execRpc(requestId, %* {"method": "espReboot", "params": []}, opts)
     except CatchableError:
-      printVerbose(opts):
+      if not opts.quiet and not opts.silent:
         print(colYellow, "Expected timeout during reboot.")
   finally:
     client.close()
@@ -180,16 +165,16 @@ proc runFirmwareRpc(opts: FlashOptions,
   client = newSocket(buffered=false)
   try:
     client.connect(opts.ipAddress, opts.port)
-    printUnlessSilent(opts):
+    if not opts.silent:
       print(colYellow, "[reconnected to ", opts.ipAddress, ":", $opts.port, "]")
 
     let verifyCall: JsonNode = %* {"method": "firmware-verify", "params": []}
     result.verifyResponse = client.execRpc(requestId, verifyCall, opts)
     if opts.prettyPrint:
-      printUnlessSilent(opts):
+      if not opts.silent:
         print(colBlue, pretty(result.verifyResponse))
     else:
-      printUnlessSilent(opts):
+      if not opts.silent:
         print(colBlue, $(result.verifyResponse))
   finally:
     client.close()
@@ -203,7 +188,7 @@ proc flashFirmware*(opts: FlashOptions): FlashResult =
   if fwStrm.isNil:
     raise newException(IOError, "Failed to open firmware file: " & opts.firmwarePath)
 
-  printUnlessSilent(opts):
+  if not opts.silent:
     print("Checking firmware file: ", opts.firmwarePath)
 
   var requestId = 0

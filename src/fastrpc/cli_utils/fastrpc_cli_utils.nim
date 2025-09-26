@@ -47,27 +47,6 @@ type
 var totalTime = 0'i64
 var totalCalls = 0'i64
 
-template timeBlock(n: string, opts: RpcOptions, blk: untyped): untyped =
-  let t0 = getTime()
-  blk
-
-  let td = getTime() - t0
-  if not opts.quiet and not opts.noprint:
-    print colGray, "[took: ", $(td.inMicroseconds().float() / 1e3), " millis]"
-  totalCalls.inc()
-  totalTime = totalTime + td.inMicroseconds()
-  allTimes.add(td.inMicroseconds())
-  
-
-proc setReceiveTimeout(socket: Socket, timeoutMs: int) =
-  var timeout: Timeval
-  timeout.tv_sec = posix.Time(timeoutMs div 1000)
-  timeout.tv_usec = Suseconds(timeoutMs mod 1000 * 1000)
-  
-  if setsockopt(socket.getFd(), SOL_SOCKET, SO_RCVTIMEO, 
-                addr timeout, sizeof(timeout).Socklen) != 0:
-    raise newException(OSError, "Failed to set receive timeout")
-
 
 var
   id: int = 1
