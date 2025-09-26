@@ -1,12 +1,10 @@
-import json, tables, strutils, macros, options
+import json, tables, strutils, options
 import strformat
-import net, os
+import net
 import times
 import stats
 import sequtils
-import locks
 import sugar
-import posix
 
 import cligen
 from cligen/argcvt import ArgcvtParams, argKeys         # Little helpers
@@ -19,152 +17,78 @@ import ../servertypes
 
 import ./fw_utils
 import ./cli_tools
+import ./rpc_utils
 
-type 
-  RpcIpAddress = object
-    ipstring: string
-    ipaddr: IpAddress
+proc shouldLog(opts: RpcOptions): bool =
+  not opts.quiet and not opts.noprint
 
-  RpcOptions = object
-    id: int
-    showstats: bool
-    keepalive: bool
-    count: int
-    delay: int
-    jsonArg: string
-    ipAddr: RpcIpAddress
-    port: Port
-    udp: bool
-    noresults: bool
-    prettyPrint: bool
-    quiet: bool
-    noprint: bool
-    system: bool
-    subscribe: bool
-    dryRun: bool
+proc logRequestDetails(opts: RpcOptions, result: RpcCallResult) =
+  if not shouldLog(opts):
+    return
 
+  print("[socket mcall ipaddr: " & repr(opts.ipAddr.ipaddr) & "]")
+  print("[socket mcall bytes:len: " & repr(result.payload.len()) & "]")
 
-proc execRpc( client: Socket, i: int, call: var FastRpcRequest, opts: RpcOptions): JsonNode = 
-  {.cast(gcsafe).}:
-    call.id = id
-    inc(id)
+  if not opts.udp:
+    print("[socket mcall bytes:lenprefix: " & repr(result.lengthPrefix) & "]")
 
-    var ss = MsgBuffer.init()
-    ss.pack(call)
-    let mcall = ss.data
-
-    template parseReultsJson(response: untyped): untyped = 
-      var resbuf = MsgBuffer.init(response.result.buf.data)
-      resbuf.toJsonNode()
-
-    timeBlock("call", opts):
-      let msz = mcall.len().int16.toStrBe16()
-      if not opts.quiet and not opts.noprint:
-        print("[socket mcall ipaddr: " & repr(opts.ipAddr.ipaddr) & "]")
-        print("[socket mcall bytes:len: " & repr(mcall.len()) & "]")
-        print("[socket mcall bytes:lenprefix: " & repr msz & "]")
-        print("[socket mcall bytes:data: " & repr(mcall[0..min(mcall.len()-1, 20)]) & "]")
-      if opts.udp:
-        client.sendTo($opts.ipAddr.ipaddr, opts.port, mcall)
-      else:
-        client.send( msz & mcall )
-
-      var response = readResponse(opts)
-
-    var mnode: JsonNode
-
-    if opts.subscribe:
-      var resbuf = MsgBuffer.init(response.result.buf.data)
-      mnode = resbuf.toJsonNode()
-      if not opts.quiet and not opts.noprint:
-        print colAquamarine, "[response:kind: ", repr(response.kind), "]"
-      response = readResponse(opts)
-
-    while response.kind == Publish:
-      mnode = response.parseReultsJson()
-      response.prettyPrintResults()
-
-      response = readResponse(opts)
-
-    if response.kind == Error:
-      var resbuf = MsgBuffer.init(response.result.buf.data)
-      var err: FastRpcError
-      resbuf.setPosition(0)
-      resbuf.unpack(err)
-      if not opts.quiet and not opts.noprint:
-        print(colRed, repr err)
+  let preview =
+    if result.payload.len == 0:
+      ""
     else:
-      response.prettyPrintResults()
+      result.payload[0 .. min(result.payload.high, 20)]
+  print("[socket mcall bytes:data: " & repr(preview) & "]")
 
-    if not opts.quiet and not opts.noprint:
-      print colGreen, "[rpc done at " & $now() & "]"
+proc logResponseEntry(opts: RpcOptions, entry: RpcResponseEntry) =
+  if not shouldLog(opts):
+    return
 
-    if opts.delay > 0:
-      os.sleep(opts.delay)
+  if opts.udp:
+    print(colGray, "[udp socket data: " & repr(entry.raw) & "]")
+    print(colGray, "[udp read bytes: ", $entry.raw.len(), "]")
+  else:
+    print(colGray, "[read bytes: ", $entry.raw.len(), "]")
+    print(colGray, "[read: " & repr(entry.raw) & "]")
 
-    mnode
+  print(colAquamarine, "[response:kind: ", repr(entry.response.kind), "]")
+  print(colAquamarine, "[read response: ", repr(entry.response), "]")
 
-import nativesockets
+  if entry.error.isSome:
+    print(colRed, repr(entry.error.get()))
+    return
 
-proc runRpc(opts: RpcOptions, req: FastRpcRequest) = 
-  {.cast(gcsafe).}:
-    # for (f,v) in margs.pairs():
-      # call[f] = v
-    var call = req
+  if entry.kind == rrAck or opts.noresults:
+    return
 
-    let domain = if opts.ipAddr.ipaddr.family == IpAddressFamily.IPv6: Domain.AF_INET6 else: Domain.AF_INET
-    let protocol = if opts.udp: Protocol.IPPROTO_UDP else: Protocol.IPPROTO_TCP
-    let sockType = if opts.udp: SOCK_DGRAM else: SOCK_STREAM
-    print(colYellow, "[socket server: domain: ", $domain, " protocol: ", $protocol, "]")
-    let client: Socket = newSocket(buffered=false, domain=domain, sockType=sockType, protocol=protocol, )
-
-    print(colYellow, "[connecting to server ip addr: ", $opts.ipAddr.ipstring, " port: ", $opts.port, " udp: ", $opts.udp, "]")
-    if not opts.udp:
-      client.connect(opts.ipAddr.ipstring, opts.port)
+  if entry.json.isSome:
+    let node = entry.json.get()
+    if opts.prettyPrint:
+      print(colOrange, pretty(node))
     else:
-      setReceiveTimeout(client, 1000)
+      print(colOrange, $(node))
+  else:
+    print(colOrange, "[response payload unavailable]")
 
-    print(colYellow, "[connected to server ip addr: ", $opts.ipAddr.ipstring,"]")
-    print(colBlue, "[call: ", repr call, "]")
+proc logCallTiming(opts: RpcOptions, durationMicros: int64) =
+  if not shouldLog(opts):
+    return
 
-    for i in 1..opts.count:
-        discard client.execRpc(i, call, opts)
+  let millis = durationMicros.float / 1_000.0
+  print(colGray, fmt("[took: {millis:.3f} millis]"))
 
-    var mb = newString(4096)
-    while opts.keepalive:
-      var address: IpAddress
-      var port: Port
-      var count = 0
-      if opts.udp:
-        count = client.recvFrom(mb, mb.len(),address, port)
-      else:
-        count = client.recv(mb, mb.len(), timeout = -1)
+proc logRpcCompletion(opts: RpcOptions) =
+  if not shouldLog(opts):
+    return
+  print(colGreen, "[rpc done at " & $now() & "]")
 
-      mb.setLen(count)
+proc logKeepAlive(opts: RpcOptions, message: KeepAliveMessage) =
+  if not shouldLog(opts):
+    return
 
-      if mb != "":
-        try:
-          let res = mb.toJsonNode()
-          print("subscription: ", $res)
-        except Exception:
-          print(colRed, "[exception: ", getCurrentExceptionMsg() ,"]")
-    client.close()
-
-    print("\n")
-
-    if opts.showstats: 
-      print(colMagenta, "[total time: " & $(totalTime.float() / 1e3) & " millis]")
-      print(colMagenta, "[total count: " & $(totalCalls) & " No]")
-      print(colMagenta, "[avg time: " & $(float(totalTime.float()/1e3)/(1.0 * float(totalCalls))) & " millis]")
-
-      var ss: RunningStat ## Must be "var"
-      ss.push(allTimes.mapIt(float(it)/1000.0))
-
-      print(colMagenta, "[mean time: " & $(ss.mean()) & " millis]")
-      print(colMagenta, "[max time: " & $(allTimes.max().float()/1_000.0) & " millis]")
-      print(colMagenta, "[variance time: " & $(ss.variance()) & " millis]")
-      print(colMagenta, "[standardDeviation time: " & $(ss.standardDeviation()) & " millis]")
-
+  if message.json.isSome:
+    print("subscription: ", $message.json.get())
+  elif message.parseError.isSome:
+    print(colRed, "[exception: ", message.parseError.get(), "]")
 proc call(ip: RpcIpAddress,
           cmdargs: seq[string],
           port=Port(5656),
@@ -182,20 +106,23 @@ proc call(ip: RpcIpAddress,
           keepalive=false,
           rawJsonArgs="") =
 
-  var opts = RpcOptions(count: count,
+  var opts = RpcOptions(nextId: 1,
+                        count: count,
                         delay: delay,
+                        jsonArg: rawJsonArgs,
                         ipAddr: ip,
                         port: port,
+                        udp: udp,
+                        noresults: noresults,
+                        prettyPrint: pretty,
                         quiet: quiet,
                         noprint: silent,
-                        noresults: noresults,
-                        dryRun: dry_run,
-                        showstats: showstats,
-                        prettyPrint: pretty,
                         system: system,
                         subscribe: subscribe,
-                        udp: udp,
-                        keepalive: keepalive)
+                        dryRun: dry_run,
+                        showstats: showstats,
+                        keepalive: keepalive,
+                        receiveTimeoutMs: DefaultUdpTimeoutMs)
 
   ## Some API call
   let
@@ -211,8 +138,6 @@ proc call(ip: RpcIpAddress,
   # echo fmt("rpc params:pargs: {repr pargs}")
   echo fmt("rpc params:jargs: {repr jargs}")
   echo fmt("rpc params: {$jargs}")
-
-  let margs = %* {"method": name, "params": % jargs }
 
   var ss = MsgBuffer.init()
   ss.write jargs.fromJsonNode()
@@ -231,8 +156,81 @@ proc call(ip: RpcIpAddress,
   let mcall = sc.data
   print(colYellow, "MCALL:", repr mcall)
 
-  if not opts.dryRun:
-    opts.runRpc(call)
+  if opts.dryRun:
+    return
+
+  let domain =
+    if opts.ipAddr.ipaddr.family == IpAddressFamily.IPv6:
+      Domain.AF_INET6
+    else:
+      Domain.AF_INET
+  let protocol =
+    if opts.udp:
+      Protocol.IPPROTO_UDP
+    else:
+      Protocol.IPPROTO_TCP
+
+  if shouldLog(opts):
+    print(colYellow, "[socket server: domain: ", $domain, " protocol: ", $protocol, "]")
+    print(colYellow, "[connecting to server ip addr: ", $opts.ipAddr.ipstring,
+          " port: ", $opts.port, " udp: ", $opts.udp, "]")
+
+  var client: Socket
+  var clientOpen = false
+  var durationsMicros = newSeq[int64]()
+
+  try:
+    client = openRpcSocket(opts)
+    clientOpen = true
+
+    if shouldLog(opts):
+      print(colYellow, "[connected to server ip addr: ", $opts.ipAddr.ipstring, "]")
+      print(colBlue, "[call: ", repr(call), "]")
+
+    for _ in 0..<opts.count:
+      let result = execRpc(client, call, opts)
+      durationsMicros.add(result.durationMicros)
+
+      logRequestDetails(opts, result)
+      for entry in result.responses:
+        logResponseEntry(opts, entry)
+      logCallTiming(opts, result.durationMicros)
+      logRpcCompletion(opts)
+
+    if opts.keepalive:
+      while opts.keepalive:
+        let keepAliveOpt = recvKeepAlive(client, opts)
+        if keepAliveOpt.isNone:
+          continue
+        logKeepAlive(opts, keepAliveOpt.get())
+  finally:
+    if clientOpen:
+      client.close()
+
+  print("\n")
+
+  if opts.showstats and durationsMicros.len > 0:
+    let totalMicros = durationsMicros.foldl(a + b, 0'i64)
+    let totalMillis = totalMicros.float / 1_000.0
+    let totalCalls = durationsMicros.len
+    let avgMillis = totalMillis / float(totalCalls)
+
+    print(colMagenta, "[total time: ", $totalMillis, " millis]")
+    print(colMagenta, "[total count: ", $totalCalls, " No]")
+    print(colMagenta, "[avg time: ", $avgMillis, " millis]")
+
+    var ss: RunningStat
+    ss.push(durationsMicros.mapIt(float(it) / 1_000.0))
+
+    var maxMicros = durationsMicros[0]
+    for value in durationsMicros:
+      if value > maxMicros:
+        maxMicros = value
+
+    print(colMagenta, "[mean time: ", $ss.mean(), " millis]")
+    print(colMagenta, "[max time: ", $(maxMicros.float / 1_000.0), " millis]")
+    print(colMagenta, "[variance time: ", $ss.variance(), " millis]")
+    print(colMagenta, "[standardDeviation time: ", $ss.standardDeviation(), " millis]")
 
 proc flash(ip: RpcIpAddress,
            firmware: string,
