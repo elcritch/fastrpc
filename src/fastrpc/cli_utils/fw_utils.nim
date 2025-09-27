@@ -87,15 +87,17 @@ proc runFirmwareRpc(opts: FlashOptions,
       raise newException(ValueError,
         "Firmware version mismatch: " & (if res.len() > 1: res[1] else: "unknown"))
 
+  var otaId = 1
   while not fwStrm.atEnd():
+    otaId.inc()
     let chunk = fwStrm.readStr(BuffSz)
     let chunkSha1 = $secureHash(chunk)
     if not opts.quiet and not opts.silent:
       print(colBlue, "Uploading bytes: ", $chunk.len())
-    let chunkArgs: JsonNode = %* [chunk, chunkSha1, requestId]
+    let chunkArgs: JsonNode = %* [chunk, chunkSha1, otaId]
     let chunkResNode = execRpcJson(cli, "firmware-chunk", chunkArgs, opts, silence=opts.silent)
     let chunkRes = to(chunkResNode, tuple[bytesWritten: int, totalWritten: int])
-    inc requestId
+    inc otaId
     if not opts.silent:
       print(colYellow, "Uploaded bytes: ", $chunkRes)
 
