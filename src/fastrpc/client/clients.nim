@@ -58,12 +58,14 @@ proc setUdpDestination*(c: var FastRpcClient, host: string, port: Port) =
 
 when defined(posix):
   import std/posix
-  proc setReceiveTimeout*(socket: Socket, timeoutMs: int) =
+  proc setReceiveTimeout*(c: var FastRpcClient, timeoutMs: int) =
+    if c.udp: return
+
     var timeout: Timeval
     timeout.tv_sec = posix.Time(timeoutMs div 1000)
     timeout.tv_usec = Suseconds(timeoutMs mod 1000 * 1000)
 
-    if setsockopt(socket.getFd(), SOL_SOCKET, SO_RCVTIMEO,
+    if setsockopt(c.socket.getFd(), SOL_SOCKET, SO_RCVTIMEO,
                   addr timeout, sizeof(timeout).Socklen) != 0:
       raise newException(OSError, "Failed to set receive timeout")
 

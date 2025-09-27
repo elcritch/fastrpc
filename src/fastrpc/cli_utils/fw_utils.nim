@@ -57,85 +57,76 @@ proc runFirmwareRpc(opts: FlashOptions,
                     fwStrm: Stream,
                     requestId: var int): FlashResult =
   ## Connect via FastRpcClient (TCP), then perform firmware RPCs.
-  var sock = newSocket(buffered=false)
-  try:
-    sock.connect(opts.ipAddress, opts.port)
-    if not opts.silent:
-      print(colYellow, "[connected to ", opts.ipAddress, ":", $opts.port, "]")
+  if not opts.silent:
+    print(colYellow, "[connecting to ", opts.ipAddress, ":", $opts.port, "]")
+  var cli = frpcc.newFastRpcClient(opts.ipAddress.parseIpAddress(), opts.port, opts.udp)
+  cli.setReceiveTimeout(1000)
+  if not opts.silent:
+    print(colYellow, "[connected to ", opts.ipAddress, ":", $opts.port, "]")
 
-    var cli = if opts.udp: frpcc.newFastRpcClientUdp(sock, opts.ipAddress, opts.port)
-              else: frpcc.newFastRpcClientTcp(sock)
+  if not opts.silent:
+    print(colBlue, "Uploaded Firmware header...")
+  let hdrChunk = fwStrm.readStr(BuffSz)
+  let hdrSha1 = $secureHash(hdrChunk)
+  let hdrArgs: JsonNode = %* [hdrChunk, hdrSha1]
 
-    if not opts.silent:
-      print(colBlue, "Uploaded Firmware header...")
-    let hdrChunk = fwStrm.readStr(BuffSz)
-    let hdrSha1 = $secureHash(hdrChunk)
-    let hdrArgs: JsonNode = %* [hdrChunk, hdrSha1]
+  if not opts.quiet and not opts.silent:
+    print(colBlue, "hdr chunk len: ", $hdrChunk.len(), " sha1: ", hdrSha1)
+  let hdrResNode = execRpcJson(cli, "firmware-begin", hdrArgs, opts)
 
-    if not opts.quiet and not opts.silent:
-      print(colBlue, "hdr chunk len: ", $hdrChunk.len(), " sha1: ", hdrSha1)
-    let hdrResNode = execRpcJson(cli, "firmware-begin", hdrArgs, opts)
+  if not opts.quiet and not opts.silent:
+    print(colBlue, "WARNING: chunk_len result: ", $(hdrResNode))
 
-    if not opts.quiet and not opts.silent:
-      print(colBlue, "WARNING: chunk_len result: ", $(hdrResNode))
-
-    let res = to(hdrResNode, seq[string])
-    if res.len() == 0 or res[0] != "ok":
-      if opts.forceUpload:
-        if not opts.silent:
-          print(colYellow, "Warning: uploading firmware despite version mismatch: ",
-                if res.len() > 1: res[1] else: "unknown")
-      else:
-        raise newException(ValueError,
-          "Firmware version mismatch: " & (if res.len() > 1: res[1] else: "unknown"))
-
-    while not fwStrm.atEnd():
-      let chunk = fwStrm.readStr(BuffSz)
-      let chunkSha1 = $secureHash(chunk)
-      if not opts.quiet and not opts.silent:
-        print(colBlue, "Uploading bytes: ", $chunk.len())
-      let chunkArgs: JsonNode = %* [chunk, chunkSha1, requestId]
-      let chunkResNode = execRpcJson(cli, "firmware-chunk", chunkArgs, opts, silence=true)
-      let chunkRes = to(chunkResNode, int)
-      inc requestId
+  let res = to(hdrResNode, seq[string])
+  if res.len() == 0 or res[0] != "ok":
+    if opts.forceUpload:
       if not opts.silent:
-        print(colYellow, "Uploaded bytes: ", $chunkRes)
+        print(colYellow, "Warning: uploading firmware despite version mismatch: ",
+              if res.len() > 1: res[1] else: "unknown")
+    else:
+      raise newException(ValueError,
+        "Firmware version mismatch: " & (if res.len() > 1: res[1] else: "unknown"))
 
-    let finishArgs: JsonNode = %* ["0"]
-    let finishResNode = execRpcJson(cli, "firmware-finish", finishArgs, opts)
-    let finishRes = to(finishResNode, int)
-    result.uploadedBytes = finishRes
+  while not fwStrm.atEnd():
+    let chunk = fwStrm.readStr(BuffSz)
+    let chunkSha1 = $secureHash(chunk)
+    if not opts.quiet and not opts.silent:
+      print(colBlue, "Uploading bytes: ", $chunk.len())
+    let chunkArgs: JsonNode = %* [chunk, chunkSha1, requestId]
+    let chunkResNode = execRpcJson(cli, "firmware-chunk", chunkArgs, opts, silence=true)
+    let chunkRes = to(chunkResNode, int)
+    inc requestId
     if not opts.silent:
-      print(colYellow, "Uploaded total bytes: ", $finishRes)
+      print(colYellow, "Uploaded bytes: ", $chunkRes)
 
-    if not opts.silent:
-      print(colRed, "Rebooting device...")
-    try:
-      discard execRpcJson(cli, "espReboot", %* [], opts)
-    except CatchableError:
-      if not opts.quiet and not opts.silent:
-        print(colYellow, "Expected timeout during reboot.")
-  finally:
-    sock.close()
+  let finishArgs: JsonNode = %* ["0"]
+  let finishResNode = execRpcJson(cli, "firmware-finish", finishArgs, opts)
+  let finishRes = to(finishResNode, int)
+  result.uploadedBytes = finishRes
+  if not opts.silent:
+    print(colYellow, "Uploaded total bytes: ", $finishRes)
+
+  if not opts.silent:
+    print(colRed, "Rebooting device...")
+  try:
+    discard execRpcJson(cli, "espReboot", %* [], opts)
+  except CatchableError:
+    if not opts.quiet and not opts.silent:
+      print(colYellow, "Expected timeout during reboot.")
 
   if opts.waitAfterRebootMs > 0:
     sleep(opts.waitAfterRebootMs.int)
 
-  sock = newSocket(buffered=false)
-  try:
-    sock.connect(opts.ipAddress, opts.port)
+  var cliPost = frpcc.newFastRpcClient(opts.ipAddress.parseIpAddress(), opts.port, opts.udp)
+  if not opts.silent:
+    print(colYellow, "[reconnected to ", opts.ipAddress, ":", $opts.port, "]")
+  result.verifyResponse = execRpcJson(cliPost, "firmware-verify", %* [], opts)
+  if opts.prettyPrint:
     if not opts.silent:
-      print(colYellow, "[reconnected to ", opts.ipAddress, ":", $opts.port, "]")
-    var cli2 = frpcc.newFastRpcClientTcp(sock)
-    result.verifyResponse = execRpcJson(cli2, "firmware-verify", %* [], opts)
-    if opts.prettyPrint:
-      if not opts.silent:
-        print(colBlue, pretty(result.verifyResponse))
-    else:
-      if not opts.silent:
-        print(colBlue, $(result.verifyResponse))
-  finally:
-    sock.close()
+      print(colBlue, pretty(result.verifyResponse))
+  else:
+    if not opts.silent:
+      print(colBlue, $(result.verifyResponse))
 
 proc flashFirmware*(opts: FlashOptions): FlashResult =
   if opts.ipAddress.len == 0:

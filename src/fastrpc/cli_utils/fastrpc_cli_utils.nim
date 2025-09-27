@@ -48,15 +48,6 @@ type
     noprint: bool
 
 
-proc setReceiveTimeout(socket: Socket, timeoutMs: int) =
-  var timeout: Timeval
-  timeout.tv_sec = posix.Time(timeoutMs div 1000)
-  timeout.tv_usec = Suseconds(timeoutMs mod 1000 * 1000)
-  
-  if setsockopt(socket.getFd(), SOL_SOCKET, SO_RCVTIMEO, 
-                addr timeout, sizeof(timeout).Socklen) != 0:
-    raise newException(OSError, "Failed to set receive timeout")
-
 
 var
   id: int = 1
@@ -71,8 +62,7 @@ proc runRpc(opts: RpcOptions, mname: string, jargs: JsonNode) =
     print(colYellow, "[connecting to server ip addr: ", $opts.ipAddr.ipstring, " port: ", $opts.port, " udp: ", $opts.udp, "]")
     var cli: frpcc.FastRpcClient
     cli = frpcc.newFastRpcClient(opts.ipAddr.ipaddr, opts.port, opts.udp)
-    if not opts.udp:
-      setReceiveTimeout(cli.socket, 1000)
+    cli.setReceiveTimeout(1000)
 
     print(colYellow, "[connected to server ip addr: ", $opts.ipAddr.ipstring, "]")
 
