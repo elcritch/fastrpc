@@ -28,7 +28,7 @@ type
 
   FlashResult* = object
     uploadedBytes*: int
-    verifyResponse*: JsonNode
+    verifyResponse*: seq[string]
 
 proc validateFirmwareFile(path: string) =
   if not path.endsWith(".bin"):
@@ -78,14 +78,14 @@ proc runFirmwareRpc(opts: FlashOptions,
     print(colBlue, "WARNING: chunk_len result: ", $(hdrResNode))
 
   let res = to(hdrResNode, FlashResult)
-  if res.verifyResponse.len() == 0 or res.verifyResponse[0].getStr() != "ok":
+  if res.verifyResponse.len() == 0 or res.verifyResponse[0] != "ok":
     if opts.forceUpload:
       if not opts.silent:
         print(colYellow, "Warning: uploading firmware despite version mismatch: ",
-              if res.verifyResponse.len() > 1: res.verifyResponse[1].getStr() else: "unknown")
+              if res.verifyResponse.len() > 1: res.verifyResponse[1] else: "unknown")
     else:
       raise newException(ValueError,
-        "Firmware version mismatch: " & (if res.verifyResponse.len() > 1: res.verifyResponse[1].getStr() else: "unknown"))
+        "Firmware version mismatch: " & (if res.verifyResponse.len() > 1: res.verifyResponse[1] else: "unknown"))
 
   var otaId = 0
   while not fwStrm.atEnd():
@@ -127,13 +127,17 @@ proc runFirmwareRpc(opts: FlashOptions,
   var cliPost = frpcc.newFastRpcClient(opts.ipAddress.parseIpAddress(), opts.port, opts.udp)
   if not opts.silent:
     print(colYellow, "[reconnected to ", opts.ipAddress, ":", $opts.port, "]")
-  result.verifyResponse = execRpcJson(cliPost, "firmware-verify", %* [], opts)
+  let resVerify = execRpcJson(cliPost, "firmware-verify", %* [], opts)
   if opts.prettyPrint:
     if not opts.silent:
-      print(colBlue, pretty(result.verifyResponse))
+      print(colBlue, pretty(resVerify))
   else:
     if not opts.silent:
-      print(colBlue, $(result.verifyResponse))
+      print(colBlue, $(resVerify))
+  if resVerify.getBool():
+    result.verifyResponse = @["ok", "verify success"]
+  else:
+    result.verifyResponse = @["error", "verify failed"]
 
 proc flashFirmware*(opts: FlashOptions): FlashResult =
   if opts.ipAddress.len == 0:
