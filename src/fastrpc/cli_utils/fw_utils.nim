@@ -93,7 +93,7 @@ proc runFirmwareRpc(opts: FlashOptions,
     if not opts.quiet and not opts.silent:
       print(colBlue, "Uploading bytes: ", $chunk.len())
     let chunkArgs: JsonNode = %* [chunk, chunkSha1, requestId]
-    let chunkResNode = execRpcJson(cli, "firmware-chunk", chunkArgs, opts, silence=true)
+    let chunkResNode = execRpcJson(cli, "firmware-chunk", chunkArgs, opts, silence=opts.silent)
     let chunkRes = to(chunkResNode, int)
     inc requestId
     if not opts.silent:
