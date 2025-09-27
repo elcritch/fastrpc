@@ -94,15 +94,15 @@ proc runFirmwareRpc(opts: FlashOptions,
       print(colBlue, "Uploading bytes: ", $chunk.len())
     let chunkArgs: JsonNode = %* [chunk, chunkSha1, requestId]
     let chunkResNode = execRpcJson(cli, "firmware-chunk", chunkArgs, opts, silence=opts.silent)
-    let chunkRes = to(chunkResNode, int)
+    let chunkRes = to(chunkResNode, tuple[bytesWritten: int, totalWritten: int])
     inc requestId
     if not opts.silent:
       print(colYellow, "Uploaded bytes: ", $chunkRes)
 
   let finishArgs: JsonNode = %* ["0"]
   let finishResNode = execRpcJson(cli, "firmware-finish", finishArgs, opts)
-  let finishRes = to(finishResNode, int)
-  result.uploadedBytes = finishRes
+  let finishRes = to(finishResNode, tuple[bytesWritten: int, totalWritten: int])
+  result.uploadedBytes = finishRes.totalWritten
   if not opts.silent:
     print(colYellow, "Uploaded total bytes: ", $finishRes)
 
