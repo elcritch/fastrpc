@@ -219,14 +219,9 @@ proc flash(ip: RpcIpAddress,
                                silent: silent,
                                waitAfterRebootMs: Natural(waitAfterRebootMs))
 
-  block:
-    let result = flashFirmware(flashOpts)
-    if not silent:
-      print(colGreen, fmt("flash completed: uploaded {result.uploadedBytes} bytes"))
-  # except CatchableError as err:
-  #   if not silent:
-  #     print(colRed, "flash failed: ", err.msg)
-  #   quit(1)
+  let result = flashFirmware(flashOpts)
+  if not silent:
+    print(colGreen, fmt("flash completed: uploaded {result.uploadedBytes} bytes"))
 
 proc run_cli*() =
   proc argParse(dst: var RpcIpAddress, dfl: RpcIpAddress, a: var ArgcvtParams): bool =
