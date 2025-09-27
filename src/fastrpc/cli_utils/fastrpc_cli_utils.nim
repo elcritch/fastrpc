@@ -16,42 +16,45 @@ from cligen/argcvt import ArgcvtParams, argKeys         # Little helpers
 import msgpack4nim
 import msgpack4nim/msgpack2json
 
-import ./fw_utils
-import ./rpc_utils
 import ./cli_tools
 
 import ../server/protocol
 import ../servertypes
 import ../client/clients as frpcc except call
 
-type 
-  RpcIpAddress = object
-    ipstring: string
-    ipaddr: IpAddress
+export protocol
+export servertypes
+export frpcc
+export cli_tools
 
-  RpcOptions = object
-    id: int
-    showstats: bool
-    keepalive: bool
-    count: int
-    delay: int
-    jsonArg: string
-    ipAddr: RpcIpAddress
-    port: Port
-    udp: bool
-    noresults: bool
-    prettyPrint: bool
-    quiet: bool
-    system: bool
-    subscribe: bool
-    dryRun: bool
-    noprint: bool
+type 
+  RpcIpAddress* = object
+    ipstring*: string
+    ipaddr*: IpAddress
+
+  RpcOptions* = object
+    id*: int
+    showstats*: bool
+    keepalive*: bool
+    count*: int
+    delay*: int
+    jsonArg*: string
+    ipAddr*: RpcIpAddress
+    port*: Port
+    udp*: bool
+    noresults*: bool
+    prettyPrint*: bool
+    quiet*: bool
+    system*: bool
+    subscribe*: bool
+    dryRun*: bool
+    noprint*: bool
 
 
 
 var
-  id: int = 1
-  allTimes = newSeq[int64]()
+  id*: int = 1
+  allTimes*: seq[int64] = newSeq[int64]()
 
 ## pretty printing is handled inline in runRpc now
 
@@ -95,12 +98,9 @@ proc runRpc(opts: RpcOptions, mname: string, jargs: JsonNode) =
                   else: print(colOrange, $(j))
                 break
               of Error:
-                let eopt = decodeError(resp)
+                let eopt = frpcc.decodeError(resp)
                 if not opts.quiet and not opts.noprint:
-                  if eopt.isSome:
-                    print(colRed, repr eopt.get())
-                  else:
-                    print(colRed, "rpc error")
+                  print(colRed, repr(eopt))
                 break
               else:
                 break
@@ -196,33 +196,6 @@ proc call(ip: RpcIpAddress,
   if not opts.dryRun:
     opts.runRpc(name, jargs)
 
-proc flash(ip: RpcIpAddress,
-           firmware: string,
-           port=Port(5555),
-           tcp=false,
-           force=false,
-           pretty=false,
-           quiet=false,
-           silent=false,
-           waitAfterRebootMs=DefaultWaitAfterRebootMs) =
-
-  if waitAfterRebootMs < 0:
-    raise newException(ValueError, "waitAfterRebootMs must be >= 0")
-
-  let flashOpts = FlashOptions(firmwarePath: firmware,
-                               ipAddress: ip.ipstring,
-                               udp: not tcp,
-                               port: port,
-                               forceUpload: force,
-                               prettyPrint: pretty,
-                               quiet: quiet,
-                               silent: silent,
-                               waitAfterRebootMs: Natural(waitAfterRebootMs))
-
-  let result = flashFirmware(flashOpts)
-  if not silent:
-    print(colGreen, fmt("flash completed: uploaded {result.uploadedBytes} bytes"))
-
 proc run_cli*() =
   proc argParse(dst: var RpcIpAddress, dfl: RpcIpAddress, a: var ArgcvtParams): bool =
     try:
@@ -244,7 +217,7 @@ proc run_cli*() =
   proc argHelp(dfl: Port; a: var ArgcvtParams): seq[string] =
     argHelp($(dfl), a)
 
-  dispatchMulti([call], [flash])
+  dispatchMulti([call])
 
 when isMainModule:
   run_cli()

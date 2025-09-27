@@ -139,7 +139,7 @@ proc recv*(c: FastRpcClient, timeoutMs = -1): Option[FastRpcResponse] =
   rbuff.unpack(response)
   some(response)
 
-proc decodeError(resp: FastRpcResponse): FastRpcError =
+proc decodeError*(resp: FastRpcResponse): FastRpcError =
   var resbuf = MsgBuffer.init(resp.result.buf.data)
   resbuf.setPosition(0)
   resbuf.unpack(result)
