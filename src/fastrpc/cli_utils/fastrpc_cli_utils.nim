@@ -141,8 +141,6 @@ proc runRpc(opts: RpcOptions, mname: string, jargs: JsonNode) =
           if opts.prettyPrint: print(colOrange, pretty(j))
           else: print(colOrange, $(j))
 
-    cli.close()
-
     print("\n")
 
     if opts.showstats:
