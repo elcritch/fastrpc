@@ -148,10 +148,14 @@ proc callRaw*(c: var FastRpcClient,
               name: string,
               params: FastRpcParamsBuffer,
               system = false,
-              timeoutMs = -1): FastRpcResponse =
+              timeoutMs = -1,
+              noResponse = false
+              ): FastRpcResponse =
   ## Perform a single RPC call and return one response.
   let req = c.makeRequest(name, params, kind = Request, system = system)
   c.send(req)
+  if noResponse:
+    return FastRpcResponse(kind: Unsupported, id: req.id, result: FastRpcParamsBuffer())
   let respOpt = c.recv(timeoutMs)
   if respOpt.isNone:
     raise newException(RpcTimeoutError, "No response received")
