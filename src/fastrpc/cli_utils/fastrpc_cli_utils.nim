@@ -149,7 +149,7 @@ proc runRpc(opts: RpcOptions, mname: string, jargs: JsonNode) =
 proc call(ip: RpcIpAddress,
           cmdargs: seq[string],
           port=Port(5656),
-          tcp=false,
+          udp=true,
           dry_run=false,
           quiet=false,
           silent=false,
@@ -175,7 +175,7 @@ proc call(ip: RpcIpAddress,
                         prettyPrint: pretty,
                         system: system,
                         subscribe: subscribe,
-                        udp: not tcp,
+                        udp: udp,
                         keepalive: keepalive)
 
   ## Some API call
@@ -219,14 +219,14 @@ proc flash(ip: RpcIpAddress,
                                silent: silent,
                                waitAfterRebootMs: Natural(waitAfterRebootMs))
 
-  try:
+  block:
     let result = flashFirmware(flashOpts)
     if not silent:
       print(colGreen, fmt("flash completed: uploaded {result.uploadedBytes} bytes"))
-  except CatchableError as err:
-    if not silent:
-      print(colRed, "flash failed: ", err.msg)
-    quit(1)
+  # except CatchableError as err:
+  #   if not silent:
+  #     print(colRed, "flash failed: ", err.msg)
+  #   quit(1)
 
 proc run_cli*() =
   proc argParse(dst: var RpcIpAddress, dfl: RpcIpAddress, a: var ArgcvtParams): bool =
