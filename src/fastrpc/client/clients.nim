@@ -60,7 +60,6 @@ proc setUdpDestination*(c: var FastRpcClient, host: string, port: Port) =
 when defined(posix):
   import std/posix
   proc setReceiveTimeout*(c: var FastRpcClient, timeoutMs: int) =
-    if c.udp: return
 
     var timeout: Timeval
     timeout.tv_sec = posix.Time(timeoutMs div 1000)
