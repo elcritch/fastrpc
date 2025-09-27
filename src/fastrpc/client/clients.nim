@@ -149,12 +149,12 @@ proc callRaw*(c: var FastRpcClient,
               params: FastRpcParamsBuffer,
               system = false,
               timeoutMs = -1,
-              noResponse = false
+              skipResponse = false
               ): FastRpcResponse =
   ## Perform a single RPC call and return one response.
   let req = c.makeRequest(name, params, kind = Request, system = system)
   c.send(req)
-  if noResponse:
+  if skipResponse:
     return FastRpcResponse(kind: Unsupported, id: req.id, result: FastRpcParamsBuffer())
   let respOpt = c.recv(timeoutMs)
   if respOpt.isNone:
@@ -165,9 +165,10 @@ proc call*[R](c: var FastRpcClient,
               name: string,
               params: FastRpcParamsBuffer,
               system = false,
-              timeoutMs = -1): R =
+              timeoutMs = -1,
+              skipResponse = false): R =
   ## Call a method and decode the final result into type R.
-  let resp = c.callRaw(name, params, system = system, timeoutMs = timeoutMs)
+  let resp = c.callRaw(name, params, system = system, timeoutMs = timeoutMs, skipResponse = skipResponse)
   case resp.kind
   of Error:
     let err = decodeError(resp)
@@ -186,17 +187,19 @@ template call*[R, T](c: var FastRpcClient,
                      name: string,
                      args: T,
                      system = false,
-                     timeoutMs = -1): R =
+                     timeoutMs = -1,
+                     skipResponse = false): R =
   ## Convenience wrapper: pack args automatically using rpcPack.
-  call[R](c, name, rpcPack(args), system = system, timeoutMs = timeoutMs)
+  call[R](c, name, rpcPack(args), system = system, timeoutMs = timeoutMs, skipResponse = skipResponse)
 
 proc callJson*(c: var FastRpcClient,
                name: string,
                args: JsonNode = %* {},
                system = false,
-               timeoutMs = -1): JsonNode =
+               timeoutMs = -1,
+               skipResponse = false): JsonNode =
   ## JSON-friendly call: pass params as JsonNode, get JsonNode result.
-  let resp = c.callRaw(name, rpcPack(args), system = system, timeoutMs = timeoutMs)
+  let resp = c.callRaw(name, rpcPack(args), system = system, timeoutMs = timeoutMs, skipResponse = skipResponse)
   case resp.kind
   of Error:
     let err = decodeError(resp)
@@ -214,10 +217,13 @@ proc callJson*(c: var FastRpcClient,
 proc subscribe*(c: var FastRpcClient,
                 name: string,
                 args: FastRpcParamsBuffer,
-                timeoutMs = -1): FastRpcId =
+                timeoutMs = -1,
+                skipResponse = false): FastRpcId =
   ## Send a subscribe request. Returns the subscription id from the ack.
   let req = c.makeRequest(name, args, kind = Subscribe)
   c.send(req)
+  if skipResponse:
+    return FastRpcId(req.id)
   let ackOpt = c.recv(timeoutMs)
   if ackOpt.isNone:
     raise newException(RpcTimeoutError, "No subscribe ack received")
