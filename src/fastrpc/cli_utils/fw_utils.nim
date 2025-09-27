@@ -17,6 +17,7 @@ type
   FlashOptions* = object
     firmwarePath*: string
     ipAddress*: string
+    udp*: bool
     port*: Port
     forceUpload*: bool
     prettyPrint*: bool
@@ -62,7 +63,8 @@ proc runFirmwareRpc(opts: FlashOptions,
     if not opts.silent:
       print(colYellow, "[connected to ", opts.ipAddress, ":", $opts.port, "]")
 
-    var cli = frpcc.newFastRpcClientTcp(sock)
+    var cli = if opts.udp: frpcc.newFastRpcClientUdp(sock, opts.ipAddress, opts.port)
+              else: frpcc.newFastRpcClientTcp(sock)
 
     if not opts.silent:
       print(colBlue, "Uploaded Firmware header...")
