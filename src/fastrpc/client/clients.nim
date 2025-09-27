@@ -112,7 +112,7 @@ proc recv*(c: FastRpcClient, timeoutMs = -1): Option[FastRpcResponse] =
   if c.udp:
     var ipaddr: IpAddress
     var port: Port
-    var msg = newString(65_535)
+    var msg = newString(10240)
     let count = c.socket.recvFrom(msg, msg.len(), ipaddr, port)
     if count <= 0:
       return none(FastRpcResponse)
