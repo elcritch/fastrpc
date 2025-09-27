@@ -251,9 +251,10 @@ proc subscribe*(c: var FastRpcClient,
 template subscribe*(c: var FastRpcClient,
                     name: string,
                     args: JsonNode,
-                    timeoutMs = -1): FastRpcId =
+                    timeoutMs = -1,
+                    skipResponse = false): FastRpcId =
   ## JSON convenience wrapper for subscribe.
-  subscribe(c, name, rpcPack(args), timeoutMs)
+  subscribe(c, name, rpcPack(args), timeoutMs, skipResponse)
 
 proc recvPublish*(c: FastRpcClient,
                   timeoutMs = -1): Option[(FastRpcId, FastRpcParamsBuffer)] =
