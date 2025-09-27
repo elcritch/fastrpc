@@ -26,7 +26,8 @@ type
   RpcTimeoutError* = object of CatchableError
 
 proc `=destroy`*(c: var FastRpcClient) =
-  c.socket.close()
+  if c.socket != nil and c.socket.getFd().int != -1:
+    c.socket.close()
   `=destroy`(c.socket)
   `=destroy`(c.udp)
   `=destroy`(c.dest)

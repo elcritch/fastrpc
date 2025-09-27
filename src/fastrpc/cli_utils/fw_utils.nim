@@ -58,11 +58,11 @@ proc runFirmwareRpc(opts: FlashOptions,
                     requestId: var int): FlashResult =
   ## Connect via FastRpcClient (TCP), then perform firmware RPCs.
   if not opts.silent:
-    print(colYellow, "[connecting to ", opts.ipAddress, ":", $opts.port, "]")
+    print(colYellow, "[connecting to ", opts.ipAddress, ":", $opts.port, " udp: ", $opts.udp, "]")
   var cli = frpcc.newFastRpcClient(opts.ipAddress.parseIpAddress(), opts.port, opts.udp)
   cli.setReceiveTimeout(1000)
   if not opts.silent:
-    print(colYellow, "[connected to ", opts.ipAddress, ":", $opts.port, "]")
+    print(colYellow, "[connected to ", opts.ipAddress, ":", $opts.port, " udp: ", $opts.udp, "]")
 
   if not opts.silent:
     print(colBlue, "Uploaded Firmware header...")
