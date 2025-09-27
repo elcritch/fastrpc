@@ -77,15 +77,15 @@ proc runFirmwareRpc(opts: FlashOptions,
   if not opts.quiet and not opts.silent:
     print(colBlue, "WARNING: chunk_len result: ", $(hdrResNode))
 
-  let res = to(hdrResNode, seq[string])
-  if res.len() == 0 or res[0] != "ok":
+  let res = to(hdrResNode, FlashResult)
+  if res.verifyResponse.len() == 0 or res.verifyResponse[0].getStr() != "ok":
     if opts.forceUpload:
       if not opts.silent:
         print(colYellow, "Warning: uploading firmware despite version mismatch: ",
-              if res.len() > 1: res[1] else: "unknown")
+              if res.verifyResponse.len() > 1: res.verifyResponse[1].getStr() else: "unknown")
     else:
       raise newException(ValueError,
-        "Firmware version mismatch: " & (if res.len() > 1: res[1] else: "unknown"))
+        "Firmware version mismatch: " & (if res.verifyResponse.len() > 1: res.verifyResponse[1].getStr() else: "unknown"))
 
   var otaId = 0
   while not fwStrm.atEnd():
@@ -101,7 +101,7 @@ proc runFirmwareRpc(opts: FlashOptions,
     let chunkRes = to(chunkResNode, FlashResult)
     inc otaId
     if not opts.silent:
-      print(colYellow, "Uploaded bytes: ", $chunkRes)
+      print(colYellow, "Uploaded bytes: ", $chunkRes.uploadedBytes)
 
   if not opts.silent:
     print(colYellow, "Finishing firmware upload...")
