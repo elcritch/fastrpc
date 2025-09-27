@@ -26,6 +26,8 @@ export protocol
 export servertypes
 export frpcc
 export cli_tools
+export cligen
+export cligen/argcvt
 
 type 
   RpcIpAddress* = object
@@ -60,7 +62,7 @@ var
 
 import nativesockets
 
-proc runRpc(opts: RpcOptions, mname: string, jargs: JsonNode) =
+proc runRpc*(opts: RpcOptions, mname: string, jargs: JsonNode) =
 
     print(colYellow, "[connecting to server ip addr: ", $opts.ipAddr.ipstring, " port: ", $opts.port, " udp: ", $opts.udp, "]")
     var cli: frpcc.FastRpcClient
@@ -146,7 +148,7 @@ proc runRpc(opts: RpcOptions, mname: string, jargs: JsonNode) =
       print(colMagenta, "[variance time: " & $(ss.variance()) & " millis]")
       print(colMagenta, "[standardDeviation time: " & $(ss.standardDeviation()) & " millis]")
 
-proc call(ip: RpcIpAddress,
+proc call*(ip: RpcIpAddress,
           cmdargs: seq[string],
           port=Port(5656),
           udp=true,
