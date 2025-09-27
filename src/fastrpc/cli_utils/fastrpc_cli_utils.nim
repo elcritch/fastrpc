@@ -24,7 +24,6 @@ import ../client/clients as frpcc except call
 
 export protocol
 export servertypes
-export frpcc
 export cli_tools
 export cligen
 export argcvt
