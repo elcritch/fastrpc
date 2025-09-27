@@ -87,7 +87,7 @@ proc runFirmwareRpc(opts: FlashOptions,
       raise newException(ValueError,
         "Firmware version mismatch: " & (if res.len() > 1: res[1] else: "unknown"))
 
-  var otaId = 1
+  var otaId = 0
   while not fwStrm.atEnd():
     otaId.inc()
     let chunk = fwStrm.readStr(BuffSz)
@@ -96,15 +96,20 @@ proc runFirmwareRpc(opts: FlashOptions,
       print(colBlue, "Uploading bytes: ", $chunk.len())
     let chunkArgs: JsonNode = %* [chunk, chunkSha1, otaId]
     let chunkResNode = execRpcJson(cli, "firmware-chunk", chunkArgs, opts, silence=opts.silent)
-    let chunkRes = to(chunkResNode, tuple[bytesWritten: int, totalWritten: int])
+    if not opts.quiet and not opts.silent:
+      print(colBlue, "Uploading bytes result: ", $chunkResNode)
+    let chunkRes = to(chunkResNode, FlashResult)
     inc otaId
     if not opts.silent:
       print(colYellow, "Uploaded bytes: ", $chunkRes)
 
+  if not opts.silent:
+    print(colYellow, "Finishing firmware upload...")
+
   let finishArgs: JsonNode = %* ["0"]
   let finishResNode = execRpcJson(cli, "firmware-finish", finishArgs, opts)
-  let finishRes = to(finishResNode, tuple[bytesWritten: int, totalWritten: int])
-  result.uploadedBytes = finishRes.totalWritten
+  let finishRes = to(finishResNode, FlashResult)
+  result.uploadedBytes = finishRes.uploadedBytes
   if not opts.silent:
     print(colYellow, "Uploaded total bytes: ", $finishRes)
 
