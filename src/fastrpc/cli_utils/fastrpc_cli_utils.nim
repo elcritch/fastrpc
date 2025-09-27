@@ -67,20 +67,12 @@ var
 import nativesockets
 
 proc runRpc(opts: RpcOptions, mname: string, jargs: JsonNode) =
-    let domain = if opts.ipAddr.ipaddr.family == IpAddressFamily.IPv6: Domain.AF_INET6 else: Domain.AF_INET
-    let protocol = if opts.udp: Protocol.IPPROTO_UDP else: Protocol.IPPROTO_TCP
-    let sockType = if opts.udp: SOCK_DGRAM else: SOCK_STREAM
-    print(colYellow, "[socket server: domain: ", $domain, " protocol: ", $protocol, "]")
-    let sock: Socket = newSocket(buffered=false, domain=domain, sockType=sockType, protocol=protocol)
 
     print(colYellow, "[connecting to server ip addr: ", $opts.ipAddr.ipstring, " port: ", $opts.port, " udp: ", $opts.udp, "]")
     var cli: frpcc.FastRpcClient
+    cli = frpcc.newFastRpcClient(opts.ipAddr.ipaddr, opts.port, opts.udp)
     if not opts.udp:
-      sock.connect(opts.ipAddr.ipstring, opts.port)
-      cli = frpcc.newFastRpcClientTcp(sock)
-    else:
-      setReceiveTimeout(sock, 1000)
-      cli = frpcc.newFastRpcClientUdp(sock, opts.ipAddr.ipstring, opts.port)
+      setReceiveTimeout(cli.socket, 1000)
 
     print(colYellow, "[connected to server ip addr: ", $opts.ipAddr.ipstring, "]")
 
@@ -149,7 +141,7 @@ proc runRpc(opts: RpcOptions, mname: string, jargs: JsonNode) =
           if opts.prettyPrint: print(colOrange, pretty(j))
           else: print(colOrange, $(j))
 
-    sock.close()
+    cli.close()
 
     print("\n")
 

@@ -25,6 +25,13 @@ type
     detail*: string
   RpcTimeoutError* = object of CatchableError
 
+proc `=destroy`*(c: var FastRpcClient) =
+  c.socket.close()
+  `=destroy`(c.socket)
+  `=destroy`(c.udp)
+  `=destroy`(c.dest)
+  `=destroy`(c.nextId)
+
 proc newFastRpcClientTcp*(socket: Socket): FastRpcClient =
   ## Create a TCP FastRPC client using an already-connected socket.
   ## TCP uses a 2-byte big-endian length prefix per message.
@@ -34,6 +41,16 @@ proc newFastRpcClientUdp*(socket: Socket, host: string, port: Port): FastRpcClie
   ## Create a UDP FastRPC client. If the socket is not connected, a destination
   ## host/port must be provided to use sendTo.
   FastRpcClient(socket: socket, udp: true, dest: some((host, port)), nextId: 1)
+
+proc newFastRpcClient*(ipAddr: IpAddress, port: Port, udp: bool): FastRpcClient =
+  let domain = if ipAddr.family == IpAddressFamily.IPv6: Domain.AF_INET6 else: Domain.AF_INET
+  let protocol = if udp: Protocol.IPPROTO_UDP else: Protocol.IPPROTO_TCP
+  let sockType = if udp: SOCK_DGRAM else: SOCK_STREAM
+  let sock: Socket = newSocket(buffered=false, domain=domain, sockType=sockType, protocol=protocol)
+  if udp:
+    return newFastRpcClientUdp(sock, $ipAddr, port)
+  else:
+    return newFastRpcClientTcp(sock)
 
 proc setUdpDestination*(c: var FastRpcClient, host: string, port: Port) =
   ## Update/set the UDP destination for this client.
