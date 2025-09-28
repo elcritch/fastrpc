@@ -77,5 +77,11 @@ suite "CoAP header parsing":
   test "serialize roundtrip":
     let stream = newByteStream(dataMsg1)
     let message = parseCoap(stream)
-    let encoded = serializeCoap(message)
+    var outStream = newStringStream()
+    serializeCoap(outStream, message)
+    let s = outStream.data
+    var encoded: seq[byte] = @[]
+    encoded.setLen(s.len)
+    for i in 0 ..< s.len:
+      encoded[i] = byte(s[i])
     check encoded == @dataMsg1

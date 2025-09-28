@@ -118,22 +118,31 @@ proc parseCoap*(stream: sink Stream): CoapMessage {.raises: [ValueError, IOError
 proc payload*(message: CoapMessage): seq[byte] =
   result = message.payload.readRemaining()
 
-proc serializeCoapHeader*(header: CoapHeader): seq[byte] {.raises: [ValueError].} =
-  ## Serializes the CoAP header (including token) to bytes.
+proc writeByte(stream: Stream, b: byte) =
+  var buf: array[1, byte]
+  buf[0] = b
+  streams.writeData(stream, addr buf[0], 1)
+
+proc writeBytes(stream: Stream, data: openArray[byte]) =
+  if data.len == 0: return
+  streams.writeData(stream, unsafeAddr data[0], data.len)
+
+proc serializeCoapHeader*(stream: Stream, header: CoapHeader) {.raises: [ValueError, IOError, OSError].} =
+  ## Serializes the CoAP header (including token) to stream.
   if header.token.len > 8:
     raise newException(ValueError, "invalid token length: " & $header.token.len)
   let ver = uint8(header.version and 0b11)
   let typ = uint8(header.msgType) and 0b11
   let tkl = uint8(header.token.len) and 0b1111
   let b0 = (ver shl 6) or (typ shl 4) or tkl
-  result = @[
-    b0,
-    header.code,
-    uint8((header.messageId shr 8) and 0xff),
-    uint8(header.messageId and 0xff)
-  ]
-  for b in header.token:
-    result.add b
+  var hb: array[4, byte]
+  hb[0] = b0
+  hb[1] = header.code
+  hb[2] = uint8((header.messageId shr 8) and 0xff)
+  hb[3] = uint8(header.messageId and 0xff)
+  streams.writeData(stream, addr hb[0], hb.len)
+  if header.token.len > 0:
+    streams.writeData(stream, addr header.token[0], header.token.len)
 
 proc encodeExtended(value: int, nibble: var uint8, extra: var seq[byte]) {.raises: [ValueError].} =
   ## Encodes a CoAP option delta/length extended value.
@@ -152,9 +161,8 @@ proc encodeExtended(value: int, nibble: var uint8, extra: var seq[byte]) {.raise
   else:
     raise newException(ValueError, "value too large: " & $value)
 
-proc serializeCoapOptions*(options: seq[CoapOption]): seq[byte] {.raises: [ValueError].} =
-  ## Serializes CoAP options to bytes. Options must be in ascending order by number.
-  result = @[]
+proc serializeCoapOptions*(stream: Stream, options: seq[CoapOption]) {.raises: [ValueError, IOError, OSError].} =
+  ## Serializes CoAP options to stream. Options must be in ascending order by number.
   var lastNum = 0
   for opt in options:
     let num = int(opt.number)
@@ -168,23 +176,21 @@ proc serializeCoapOptions*(options: seq[CoapOption]): seq[byte] {.raises: [Value
     encodeExtended(deltaVal, deltaNib, extra)
     var extraLen: seq[byte] = @[]
     encodeExtended(lenVal, lenNib, extraLen)
-    let header = (deltaNib shl 4) or (lenNib and 0x0f)
-    result.add header
-    # delta extended bytes first, then length extended bytes
-    for b in extra:
-      result.add b
-    for b in extraLen:
-      result.add b
-    for b in opt.value:
-      result.add b
+    let h = (deltaNib shl 4) or (lenNib and 0x0f)
+    stream.writeByte(h)
+    if extra.len > 0:
+      streams.writeData(stream, addr extra[0], extra.len)
+    if extraLen.len > 0:
+      streams.writeData(stream, addr extraLen[0], extraLen.len)
+    if opt.value.len > 0:
+      streams.writeData(stream, addr opt.value[0], opt.value.len)
     lastNum = num
 
-proc serializeCoap*(message: CoapMessage): seq[byte] {.raises: [ValueError, IOError, OSError].} =
-  ## Serializes a full CoAP message (header, options, payload) to bytes.
-  result = serializeCoapHeader(message.header)
-  result.add(serializeCoapOptions(message.options))
+proc serializeCoap*(stream: Stream, message: CoapMessage) {.raises: [ValueError, IOError, OSError].} =
+  ## Serializes a full CoAP message (header, options, payload) to stream.
+  stream.serializeCoapHeader(message.header)
+  stream.serializeCoapOptions(message.options)
   let pl = message.payload.readRemaining()
   if pl.len > 0:
-    result.add 0xff'u8
-    for b in pl:
-      result.add b
+    stream.writeByte(0xff'u8)
+    streams.writeData(stream, addr pl[0], pl.len)
