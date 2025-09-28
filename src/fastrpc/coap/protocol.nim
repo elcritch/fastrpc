@@ -11,7 +11,6 @@ type
   CoapHeader* = object
     version*: uint8
     msgType*: CoapType
-    tokenLength*: uint8
     code*: uint8
     messageId*: uint16
     token*: seq[byte]
@@ -55,15 +54,15 @@ proc parseCoapHeader*(stream: Stream): CoapHeader =
   if result.version != 1:
     raise newException(ValueError, "unsupported CoAP version: " &
         $result.version)
+  let tokenLength = first and 0b1111
   result.msgType = CoapType((first shr 4) and 0b11)
-  result.tokenLength = first and 0b1111
   result.code = header[1]
   result.messageId = (uint16(header[2]) shl 8) or uint16(header[3])
-  if result.tokenLength > 0:
-    if result.tokenLength > 8:
+  if tokenLength > 0:
+    if tokenLength > 8:
       raise newException(ValueError,
-          "invalid token length: " & $result.tokenLength)
-    result.token = readExact(stream, int(result.tokenLength),
+          "invalid token length: " & $tokenLength)
+    result.token = readExact(stream, int(tokenLength),
         "data too short for token")
   else:
     result.token = @[]

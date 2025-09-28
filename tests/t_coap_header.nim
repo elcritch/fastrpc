@@ -21,7 +21,7 @@ suite "CoAP header parsing":
     let h = parseCoapHeader(stream)
     check h.version == 1
     check h.msgType == Confirmable
-    check h.tokenLength == 1
+    check h.token.len == 1
     check h.code == 1
     check h.messageId == 16
     check h.token.len == 1 and h.token[0] == 0xff'u8
