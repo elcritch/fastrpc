@@ -1,6 +1,13 @@
 import std/unittest
+import std/streams
 
 import fastrpc/coap/protocol
+
+proc newByteStream(data: openArray[byte]): Stream =
+  var buffer = newString(data.len)
+  for i, b in data:
+    buffer[i] = char(b)
+  newStringStream(buffer)
 
 suite "CoAP header parsing":
   test "parse simple header":
@@ -10,7 +17,8 @@ suite "CoAP header parsing":
       0x00'u8, 0x10'u8, # Message ID 16
       0xff'u8           # Token
     ]
-    let h = parseCoapHeader(data)
+    let stream = newByteStream(data)
+    let h = parseCoapHeader(stream)
     check h.version == 1
     check h.msgType == Confirmable
     check h.tokenLength == 1
@@ -24,7 +32,8 @@ suite "CoAP header parsing":
       0x00'u8, 0x10'u8
     ]
     expect ValueError:
-      discard parseCoapHeader(data)
+      let stream = newByteStream(data)
+      discard parseCoapHeader(stream)
 
   test "parse options sequence":
     let data = [
@@ -40,9 +49,9 @@ suite "CoAP header parsing":
       0xff'u8,                                      # Payload marker
       0x50'u8, 0x41'u8, 0x59'u8                     # Payload "PAY"
     ]
-    let h = parseCoapHeader(data)
-    let start = 4 + int(h.tokenLength)
-    let (options, payload) = parseCoapOptions(data[start .. ^1])
+    let stream = newByteStream(data)
+    discard parseCoapHeader(stream)
+    let (options, payload) = parseCoapOptions(stream)
     check options.len == 2
     check options[0].number == 11 and options[0].value == @[0x74'u8, 0x65'u8,
         0x6d'u8, 0x70'u8]

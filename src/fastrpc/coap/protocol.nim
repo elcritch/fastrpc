@@ -1,4 +1,6 @@
 
+import std/streams
+
 type
   CoapType* = enum
     Confirmable = 0
@@ -18,76 +20,88 @@ type
     number*: uint16
     value*: seq[byte]
 
-proc parseCoapHeader*(data: openArray[byte]): CoapHeader =
-  ## Parses the CoAP header and token from ``data``.
-  ## Raises ``ValueError`` when ``data`` is too short or the version is wrong.
-  if data.len < 4:
+proc readByte(stream: Stream, err: string): byte =
+  var buf: array[1, byte]
+  if stream.readData(addr buf[0], 1) != 1:
+    raise newException(ValueError, err)
+  buf[0]
+
+proc readExact(stream: Stream, count: int, err: string): seq[byte] =
+  result = newSeq[byte](count)
+  if count == 0:
+    return
+  let read = stream.readData(addr result[0], count)
+  if read != count:
+    raise newException(ValueError, err)
+
+proc readRemaining(stream: Stream): seq[byte] =
+  var buffer: array[256, byte]
+  result = @[]
+  while true:
+    let bytesRead = stream.readData(addr buffer[0], buffer.len)
+    if bytesRead <= 0:
+      break
+    for i in 0 ..< bytesRead:
+      result.add buffer[i]
+
+proc parseCoapHeader*(stream: Stream): CoapHeader =
+  ## Parses the CoAP header and token from ``stream``.
+  ## Raises ``ValueError`` when the stream has insufficient data or the version is wrong.
+  var header: array[4, byte]
+  if stream.readData(addr header[0], header.len) != header.len:
     raise newException(ValueError, "data too short for CoAP header")
-  let first = data[0]
+  let first = header[0]
   result.version = (first shr 6) and 0b11
   if result.version != 1:
     raise newException(ValueError, "unsupported CoAP version: " &
         $result.version)
   result.msgType = CoapType((first shr 4) and 0b11)
   result.tokenLength = first and 0b1111
-  result.code = data[1]
-  result.messageId = (uint16(data[2]) shl 8) or uint16(data[3])
+  result.code = header[1]
+  result.messageId = (uint16(header[2]) shl 8) or uint16(header[3])
   if result.tokenLength > 0:
     if result.tokenLength > 8:
       raise newException(ValueError,
           "invalid token length: " & $result.tokenLength)
-    if data.len < 4 + int(result.tokenLength):
-      raise newException(ValueError, "data too short for token")
-    result.token = @data[4 ..< 4 + int(result.tokenLength)]
+    result.token = readExact(stream, int(result.tokenLength),
+        "data too short for token")
   else:
     result.token = @[]
 
-proc parseCoapOptions*(data: openArray[byte]): (seq[CoapOption], seq[byte]) =
-  ## Parses the sequence of CoAP options from ``data``.
+proc parseCoapOptions*(stream: Stream): (seq[CoapOption], seq[byte]) =
+  ## Parses the sequence of CoAP options from ``stream``.
   ## Returns the parsed options and any remaining payload bytes.
-  var i = 0
   var current = 0
   var options: seq[CoapOption] = @[]
-  while i < data.len:
-    if data[i] == 0xff'u8:
-      return (options, @data[i + 1 ..< data.len])
-    let deltaNib = int(data[i] shr 4)
-    let lenNib = int(data[i] and 0x0f)
-    inc i
+  while not stream.atEnd:
+    let header = readByte(stream, "data too short for option header")
+    if header == 0xff'u8:
+      return (options, readRemaining(stream))
+    let deltaNib = int(header shr 4)
+    let lenNib = int(header and 0x0f)
     if deltaNib == 15 or lenNib == 15:
       raise newException(ValueError, "invalid option header")
     var delta = deltaNib
     case deltaNib
     of 13:
-      if i >= data.len:
-        raise newException(ValueError, "data too short for option delta")
-      delta = 13 + int(data[i])
-      inc i
+      delta = 13 + int(readByte(stream, "data too short for option delta"))
     of 14:
-      if i + 1 >= data.len:
-        raise newException(ValueError, "data too short for option delta")
-      delta = 269 + (int(data[i]) shl 8) + int(data[i + 1])
-      i += 2
+      let msb = readByte(stream, "data too short for option delta")
+      let lsb = readByte(stream, "data too short for option delta")
+      delta = 269 + (int(msb) shl 8) + int(lsb)
     else:
       discard
     var length = lenNib
     case lenNib
     of 13:
-      if i >= data.len:
-        raise newException(ValueError, "data too short for option length")
-      length = 13 + int(data[i])
-      inc i
+      length = 13 + int(readByte(stream, "data too short for option length"))
     of 14:
-      if i + 1 >= data.len:
-        raise newException(ValueError, "data too short for option length")
-      length = 269 + (int(data[i]) shl 8) + int(data[i + 1])
-      i += 2
+      let msb = readByte(stream, "data too short for option length")
+      let lsb = readByte(stream, "data too short for option length")
+      length = 269 + (int(msb) shl 8) + int(lsb)
     else:
       discard
-    if i + length > data.len:
-      raise newException(ValueError, "data too short for option value")
+    let value = readExact(stream, length, "data too short for option value")
     current += delta
-    let value = @data[i ..< i + length]
-    i += length
     options.add CoapOption(number: uint16(current), value: value)
   (options, @[])
