@@ -48,7 +48,7 @@ proc readRemaining(stream: Stream): seq[byte] =
     result.setLen(result.len + bytesRead)
     result[(result.len - bytesRead) ..< result.len] = buffer[0 ..< bytesRead]
 
-proc parseCoapHeader*(stream: Stream): CoapHeader =
+proc parseCoapHeader*(stream: Stream): CoapHeader {.raises: [ValueError, IOError, OSError].} =
   ## Parses the CoAP header and token from ``stream``.
   ## Raises ``ValueError`` when the stream has insufficient data or the version is wrong.
   var header: array[4, byte]
@@ -70,7 +70,7 @@ proc parseCoapHeader*(stream: Stream): CoapHeader =
   else:
     result.token = @[]
 
-proc parseCoapOptions*(stream: Stream): seq[CoapOption] =
+proc parseCoapOptions*(stream: Stream): seq[CoapOption] {.raises: [ValueError, IOError, OSError].} =
   ## Parses the sequence of CoAP options from ``stream``.
   ## Returns the parsed options and any remaining payload bytes.
   var current = 0
@@ -108,7 +108,9 @@ proc parseCoapOptions*(stream: Stream): seq[CoapOption] =
     options.add CoapOption(number: uint16(current), value: value)
   options
 
-proc parseCoap*(stream: sink Stream): CoapMessage =
+proc parseCoap*(stream: sink Stream): CoapMessage {.raises: [ValueError, IOError, OSError].} =
+  ## Parses the CoAP message from ``stream``.
+  ## Raises ``ValueError`` when the stream has insufficient data.
   result.header = parseCoapHeader(stream)
   result.options = parseCoapOptions(stream)
   result.payload = move stream
