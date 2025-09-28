@@ -117,3 +117,74 @@ proc parseCoap*(stream: sink Stream): CoapMessage {.raises: [ValueError, IOError
 
 proc payload*(message: CoapMessage): seq[byte] =
   result = message.payload.readRemaining()
+
+proc serializeCoapHeader*(header: CoapHeader): seq[byte] {.raises: [ValueError].} =
+  ## Serializes the CoAP header (including token) to bytes.
+  if header.token.len > 8:
+    raise newException(ValueError, "invalid token length: " & $header.token.len)
+  let ver = uint8(header.version and 0b11)
+  let typ = uint8(header.msgType) and 0b11
+  let tkl = uint8(header.token.len) and 0b1111
+  let b0 = (ver shl 6) or (typ shl 4) or tkl
+  result = @[
+    b0,
+    header.code,
+    uint8((header.messageId shr 8) and 0xff),
+    uint8(header.messageId and 0xff)
+  ]
+  for b in header.token:
+    result.add b
+
+proc encodeExtended(value: int, nibble: var uint8, extra: var seq[byte]) {.raises: [ValueError].} =
+  ## Encodes a CoAP option delta/length extended value.
+  if value < 0:
+    raise newException(ValueError, "negative value not allowed")
+  if value <= 12:
+    nibble = uint8(value)
+  elif value <= 268:
+    nibble = 13'u8
+    extra.add uint8(value - 13)
+  elif value <= 65804: # 269 + 0xffff - conservative upper bound
+    nibble = 14'u8
+    let v = value - 269
+    extra.add uint8((v shr 8) and 0xff)
+    extra.add uint8(v and 0xff)
+  else:
+    raise newException(ValueError, "value too large: " & $value)
+
+proc serializeCoapOptions*(options: seq[CoapOption]): seq[byte] {.raises: [ValueError].} =
+  ## Serializes CoAP options to bytes. Options must be in ascending order by number.
+  result = @[]
+  var lastNum = 0
+  for opt in options:
+    let num = int(opt.number)
+    if num < lastNum:
+      raise newException(ValueError, "options must be in ascending order")
+    let deltaVal = num - lastNum
+    let lenVal = opt.value.len
+    var deltaNib: uint8 = 0
+    var lenNib: uint8 = 0
+    var extra: seq[byte] = @[]
+    encodeExtended(deltaVal, deltaNib, extra)
+    var extraLen: seq[byte] = @[]
+    encodeExtended(lenVal, lenNib, extraLen)
+    let header = (deltaNib shl 4) or (lenNib and 0x0f)
+    result.add header
+    # delta extended bytes first, then length extended bytes
+    for b in extra:
+      result.add b
+    for b in extraLen:
+      result.add b
+    for b in opt.value:
+      result.add b
+    lastNum = num
+
+proc serializeCoap*(message: CoapMessage): seq[byte] {.raises: [ValueError, IOError, OSError].} =
+  ## Serializes a full CoAP message (header, options, payload) to bytes.
+  result = serializeCoapHeader(message.header)
+  result.add(serializeCoapOptions(message.options))
+  let pl = message.payload.readRemaining()
+  if pl.len > 0:
+    result.add 0xff'u8
+    for b in pl:
+      result.add b

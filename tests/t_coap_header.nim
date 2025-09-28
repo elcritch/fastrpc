@@ -73,3 +73,9 @@ suite "CoAP header parsing":
         0x6d'u8, 0x70'u8]
     check message.options[1].number == 27 and message.options[1].value == @[0x00'u8]
     check message.payload() == @[0x50'u8, 0x41'u8, 0x59'u8]
+
+  test "serialize roundtrip":
+    let stream = newByteStream(dataMsg1)
+    let message = parseCoap(stream)
+    let encoded = serializeCoap(message)
+    check encoded == @dataMsg1

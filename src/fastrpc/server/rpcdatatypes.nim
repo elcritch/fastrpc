@@ -19,7 +19,6 @@ import stack_strings
 export stack_strings
 
 import protocol
-export protocol
 export options
 
 type
