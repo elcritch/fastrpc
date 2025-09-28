@@ -19,6 +19,11 @@ type
     number*: uint16
     value*: seq[byte]
 
+  CoapMessage* = object
+    header*: CoapHeader
+    options*: seq[CoapOption]
+    payload*: Stream
+
 proc readByte(stream: Stream, err: string): byte =
   var buf: array[1, byte]
   if stream.readData(addr buf[0], 1) != 1:
@@ -65,7 +70,7 @@ proc parseCoapHeader*(stream: Stream): CoapHeader =
   else:
     result.token = @[]
 
-proc parseCoapOptions*(stream: Stream): (seq[CoapOption], seq[byte]) =
+proc parseCoapOptions*(stream: Stream): seq[CoapOption] =
   ## Parses the sequence of CoAP options from ``stream``.
   ## Returns the parsed options and any remaining payload bytes.
   var current = 0
@@ -73,7 +78,7 @@ proc parseCoapOptions*(stream: Stream): (seq[CoapOption], seq[byte]) =
   while not stream.atEnd:
     let header = readByte(stream, "data too short for option header")
     if header == 0xff'u8:
-      return (options, readRemaining(stream))
+      return options
     let deltaNib = int(header shr 4)
     let lenNib = int(header and 0x0f)
     if deltaNib == 15 or lenNib == 15:
@@ -101,4 +106,12 @@ proc parseCoapOptions*(stream: Stream): (seq[CoapOption], seq[byte]) =
     let value = readExact(stream, length, "data too short for option value")
     current += delta
     options.add CoapOption(number: uint16(current), value: value)
-  (options, @[])
+  options
+
+proc parseCoap*(stream: sink Stream): CoapMessage =
+  result.header = parseCoapHeader(stream)
+  result.options = parseCoapOptions(stream)
+  result.payload = move stream
+
+proc payload*(message: CoapMessage): seq[byte] =
+  result = message.payload.readRemaining()
