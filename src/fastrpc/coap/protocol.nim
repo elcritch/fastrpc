@@ -1,5 +1,6 @@
 
 import std/streams
+import std/bitops
 
 type
   CoapType* = enum
@@ -13,7 +14,7 @@ type
     msgType*: CoapType
     code*: uint8
     messageId*: uint16
-    token*: seq[byte]
+    token*: uint64
 
   CoapOption* = object
     number*: uint16
@@ -65,10 +66,11 @@ proc parseCoapHeader*(stream: Stream): CoapHeader {.raises: [ValueError, IOError
     if tokenLength > 8:
       raise newException(ValueError,
           "invalid token length: " & $tokenLength)
-    result.token = readExact(stream, int(tokenLength),
-        "data too short for token")
+    for i in 0 ..< int(tokenLength):
+      let b = cast[byte](readInt8(stream))
+      result.token = (result.token shl 8) or uint64(b)
   else:
-    result.token = @[]
+    result.token = 0
 
 proc parseCoapOptions*(stream: Stream): seq[CoapOption] {.raises: [ValueError, IOError, OSError].} =
   ## Parses the sequence of CoAP options from ``stream``.
@@ -127,22 +129,31 @@ proc writeBytes(stream: Stream, data: openArray[byte]) =
   if data.len == 0: return
   streams.writeData(stream, unsafeAddr data[0], data.len)
 
+proc toTokBytes(value: uint64): (int8, array[8, byte]) =
+  var value = value
+  var i: int8 = 0
+  while value > 0:
+    result[1][i] = byte(value and 0xff)
+    value = value shr 8
+    inc i
+  result[0] = int8(i)
+
+
 proc serializeCoapHeader*(stream: Stream, header: CoapHeader) {.raises: [ValueError, IOError, OSError].} =
   ## Serializes the CoAP header (including token) to stream.
-  if header.token.len > 8:
-    raise newException(ValueError, "invalid token length: " & $header.token.len)
   let ver = uint8(header.version and 0b11)
   let typ = uint8(header.msgType) and 0b11
-  let tkl = uint8(header.token.len) and 0b1111
-  let b0 = (ver shl 6) or (typ shl 4) or tkl
+  let (tkl, tkb) = toTokBytes(header.token)
+  echo "tkl: ", tkl, " tkb: ", tkb
+  let b0 = (ver shl 6) or (typ shl 4) or cast[byte](tkl)
   var hb: array[4, byte]
   hb[0] = b0
   hb[1] = header.code
   hb[2] = uint8((header.messageId shr 8) and 0xff)
   hb[3] = uint8(header.messageId and 0xff)
   streams.write(stream, hb)
-  if header.token.len > 0:
-    streams.writeData(stream, addr header.token[0], header.token.len)
+  if tkl > 0:
+    streams.writeData(stream, addr tkb[0], tkl)
 
 proc encodeExtended(value: int, nibble: var uint8, extra: var seq[byte]) {.raises: [ValueError].} =
   ## Encodes a CoAP option delta/length extended value.

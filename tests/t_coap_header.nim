@@ -35,10 +35,9 @@ suite "CoAP header parsing":
     let h = parseCoapHeader(stream)
     check h.version == 1
     check h.msgType == Confirmable
-    check h.token.len == 1
+    check h.token == 0xff
     check h.code == 1
     check h.messageId == 16
-    check h.token.len == 1 and h.token[0] == 0xff'u8
 
   test "reject invalid token length":
     let data = [
@@ -67,7 +66,7 @@ suite "CoAP header parsing":
     check message.header.msgType == Confirmable
     check message.header.code == 1
     check message.header.messageId == 0x1234
-    check message.header.token.len == 1 and message.header.token[0] == 0x0a'u8
+    check message.header.token == 0x0A
     check message.options.len == 2
     check message.options[0].number == 11 and message.options[0].value == @[0x74'u8, 0x65'u8,
         0x6d'u8, 0x70'u8]
