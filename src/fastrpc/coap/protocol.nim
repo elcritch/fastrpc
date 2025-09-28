@@ -34,14 +34,14 @@ proc readExact(stream: Stream, count: int, err: string): seq[byte] =
     raise newException(ValueError, err)
 
 proc readRemaining(stream: Stream): seq[byte] =
-  var buffer: array[256, byte]
-  result = @[]
+  result = newSeq[byte]()
   while true:
+    var buffer: array[256, byte]
     let bytesRead = stream.readData(addr buffer[0], buffer.len)
     if bytesRead <= 0:
       break
-    for i in 0 ..< bytesRead:
-      result.add buffer[i]
+    result.setLen(result.len + bytesRead)
+    result[(result.len - bytesRead) ..< result.len] = buffer[0 ..< bytesRead]
 
 proc parseCoapHeader*(stream: Stream): CoapHeader =
   ## Parses the CoAP header and token from ``stream``.
