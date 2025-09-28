@@ -49,15 +49,13 @@ proc parseCoapHeader*(stream: Stream): CoapHeader =
   var header: array[4, byte]
   if stream.readData(addr header[0], header.len) != header.len:
     raise newException(ValueError, "data too short for CoAP header")
-  let first = header[0]
-  result.version = (first shr 6) and 0b11
+  result.version = (header[0] shr 6) and 0b11
   if result.version != 1:
-    raise newException(ValueError, "unsupported CoAP version: " &
-        $result.version)
-  let tokenLength = first and 0b1111
-  result.msgType = CoapType((first shr 4) and 0b11)
+    raise newException(ValueError, "unsupported CoAP version: " & $result.version)
+  result.msgType = CoapType((header[0] shr 4) and 0b11)
   result.code = header[1]
   result.messageId = (uint16(header[2]) shl 8) or uint16(header[3])
+  let tokenLength = header[0] and 0b1111
   if tokenLength > 0:
     if tokenLength > 8:
       raise newException(ValueError,
