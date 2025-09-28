@@ -140,7 +140,7 @@ proc serializeCoapHeader*(stream: Stream, header: CoapHeader) {.raises: [ValueEr
   hb[1] = header.code
   hb[2] = uint8((header.messageId shr 8) and 0xff)
   hb[3] = uint8(header.messageId and 0xff)
-  streams.writeData(stream, addr hb[0], hb.len)
+  streams.write(stream, hb)
   if header.token.len > 0:
     streams.writeData(stream, addr header.token[0], header.token.len)
 
