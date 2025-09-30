@@ -20,6 +20,12 @@ template withExecHandler(pname, handlerProc, blk: untyped) =
     if handlerProc != nil:
       let `pname` {.inject.} = handlerProc
       `blk`
+  except OSError as err:
+    info("[SocketServer]::", "unhandled error from server handler: ", repr `handlerProc`)
+    info("[SocketServer]:: error name: ", $err.name, " message: ", $err.msg, " code: ", $err.errorCode)
+    for se in err.getStackTraceEntries():
+      info("[SocketServer]:: error stack trace: ", $se.filename, ":", $se.line, " ", $se.procname)
+    srv.errorCount.inc()
   except CatchableError, Defect, Exception:
     let err = getCurrentException()
     info("[SocketServer]::", "unhandled error from server handler: ", repr `handlerProc`)
