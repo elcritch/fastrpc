@@ -14,11 +14,11 @@ export inettypes
 
 import strutils, sequtils
 
-template withExecHandler(name, handlerProc, blk: untyped) =
+template withExecHandler(pname, handlerProc, blk: untyped) =
   ## check handlerProc isn't nil and handle any unexpected errors
   try:
     if handlerProc != nil:
-      let `name` {.inject.} = handlerProc
+      let `pname` {.inject.} = handlerProc
       `blk`
   except CatchableError, Defect, Exception:
     let err = getCurrentException()
