@@ -23,7 +23,7 @@ template withExecHandler(name, handlerProc, blk: untyped) =
   except CatchableError, Defect, Exception:
     let err = getCurrentException()
     info("[SocketServer]::", "unhandled error from server handler: ", repr `handlerProc`)
-    info("[SocketServer]:: error message: ", err.msg, "socketserver")
+    info("[SocketServer]:: error name: ", err.name, " message: ", err.msg)
     srv.errorCount.inc()
 
 template withReceiverSocket*(name: untyped, fd: SocketHandle, modname: string, blk: untyped) =
