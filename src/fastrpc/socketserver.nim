@@ -14,16 +14,24 @@ export inettypes
 
 import strutils, sequtils
 
-template withExecHandler(name, handlerProc, blk: untyped) =
+template withExecHandler(pname, handlerProc, blk: untyped) =
   ## check handlerProc isn't nil and handle any unexpected errors
   try:
     if handlerProc != nil:
-      let `name` {.inject.} = handlerProc
+      let `pname` {.inject.} = handlerProc
       `blk`
+  except OSError as err:
+    info("[SocketServer]::", "unhandled error from server handler: ", repr `handlerProc`)
+    info("[SocketServer]:: error name: ", $err.name, " message: ", $err.msg, " code: ", $err.errorCode)
+    for se in err.getStackTraceEntries():
+      info("[SocketServer]:: error stack trace: ", $se.filename, ":", $se.line, " ", $se.procname)
+    srv.errorCount.inc()
   except CatchableError, Defect, Exception:
     let err = getCurrentException()
     info("[SocketServer]::", "unhandled error from server handler: ", repr `handlerProc`)
-    info("[SocketServer]:: error message: ", err.msg, "socketserver")
+    info("[SocketServer]:: error name: ", $err.name, " message: ", $err.msg)
+    for se in err.getStackTraceEntries():
+      info("[SocketServer]:: error stack trace: ", $se.filename, ":", $se.line, " ", $se.procname)
     srv.errorCount.inc()
 
 template withReceiverSocket*(name: untyped, fd: SocketHandle, modname: string, blk: untyped) =
