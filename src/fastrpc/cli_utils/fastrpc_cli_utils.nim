@@ -50,6 +50,7 @@ type
     subscribe*: bool
     dryRun*: bool
     noprint*: bool
+    timeoutSec*: int
 
 
 
@@ -66,7 +67,7 @@ proc runRpc*(opts: RpcOptions, mname: string, jargs: JsonNode) =
     print(colYellow, "[connecting to server ip addr: ", $opts.ipAddr.ipstring, " port: ", $opts.port, " udp: ", $opts.udp, "]")
     var cli: frpcc.FastRpcClient
     cli = frpcc.newFastRpcClient(opts.ipAddr.ipaddr, opts.port, opts.udp)
-    cli.setReceiveTimeout(1000)
+    cli.setReceiveTimeout(opts.timeoutSec*1_000)
 
     print(colYellow, "[connected to server ip addr: ", $opts.ipAddr.ipstring, "]")
 
@@ -162,6 +163,7 @@ proc call*(ip: RpcIpAddress,
           system=false,
           subscribe=false,
           keepalive=false,
+          timeoutSec=1,
           rawJsonArgs="") =
 
   var opts = RpcOptions(count: count,
@@ -177,6 +179,7 @@ proc call*(ip: RpcIpAddress,
                         system: system,
                         subscribe: subscribe,
                         udp: udp,
+                        timeoutSec: timeoutSec,
                         keepalive: keepalive)
 
   ## Some API call
